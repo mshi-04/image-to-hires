@@ -15,7 +15,7 @@
 
 対象は、Python 3 系、PySide6、PyTorch、Clean Architecture 前提の実装、テスト、文書更新とする。
 
-MVP 前提として、単一画像処理、`2x / 3x / 4x`、Windows + NVIDIA GPU を対象にする。
+MVP 前提として、複数画像の順次処理、`2x / 3x / 4x`、Windows + NVIDIA GPU を対象にする。
 
 ## 2. レビューの基本姿勢
 
@@ -60,7 +60,8 @@ MVP 前提として、単一画像処理、`2x / 3x / 4x`、Windows + NVIDIA GPU
 
 ## 5. GUI アプリとしての確認点
 
-- ファイル選択、ドラッグアンドドロップ、起動引数が同じ経路へ流れているか
+- ファイル選択とドラッグアンドドロップが同じ経路へ流れているか
+- 複数ファイルがキューへ積まれ、順次処理されるか
 - UI スレッドで重い処理を実行していないか
 - 実行中のボタン制御や状態表示が壊れていないか
 - エラー時に UI が中途半端な状態で止まらないか
@@ -87,13 +88,17 @@ MVP 前提として、単一画像処理、`2x / 3x / 4x`、Windows + NVIDIA GPU
 
 - 目的や MVP 範囲変更なら `docs/overview.md` が更新されているか
 - 仕様変更なら `docs/requirements.md` が更新されているか
+- 要件の判断基準変更なら `docs/rules/requirements.md` が更新されているか
 - 技術方針変更なら `docs/technical-design.md` が更新されているか
 - 構造変更なら `docs/architecture.md` が更新されているか
 - 実装計画変更なら `docs/implementation-plan.md` が更新されているか
 - セットアップ手順変更なら `docs/setup.md` が更新されているか
 - サブエージェント運用変更なら `docs/subagent-guide.md` が更新されているか
 - 実装ルール変更なら `docs/coding-standards.md` が更新されているか
+- 実装ルールの判断基準変更なら `docs/rules/coding-standards.md` が更新されているか
 - テスト方針変更なら `docs/unit-test-guidelines.md` が更新されているか
+- テスト方針の判断基準変更なら `docs/rules/unit-test-guidelines.md` が更新されているか
+- レビュー観点の判断基準変更なら `docs/rules/review-guide.md` が更新されているか
 - Git 運用変更なら `docs/git-guidelines.md` と `docs/rules/git-guidelines.md` が更新されているか
 - 入口や文書マップに影響があるなら `AGENTS.md` が更新されているか
 
@@ -103,6 +108,8 @@ MVP 前提として、単一画像処理、`2x / 3x / 4x`、Windows + NVIDIA GPU
 - 成功時だけ見て失敗時を確認していない
 - UI の見た目は動くが状態遷移が壊れている
 - 一部の入力経路だけ別ロジックになっている
+- 空入力をエラーにすべき箇所と無視すべき箇所が混在している
+- キュー先頭だけ成功し、後続ジョブの状態遷移が壊れている
 - 値オブジェクトを通さずに生の値を横流ししている
 - `domain/usecase` に外部ライブラリ依存が混ざっている
 - RGB/BGR、PIL/Tensor、整数/浮動小数の変換でズレる
