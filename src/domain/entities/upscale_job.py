@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 
 from src.domain.value_objects.image_path import InputImagePath, OutputImagePath
+from src.domain.value_objects.denoise_level import DenoiseLevel
 from src.domain.value_objects.scale_factor import ScaleFactor
 
 
@@ -11,3 +12,4 @@ class UpscaleJob:
     input_image: InputImagePath
     output_image: OutputImagePath
     scale_factor: ScaleFactor
+    denoise_level: DenoiseLevel

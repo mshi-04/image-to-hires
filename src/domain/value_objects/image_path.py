@@ -5,7 +5,7 @@ from src.domain.exceptions import UnsupportedImageFormatError
 
 
 SUPPORTED_INPUT_EXTENSIONS = frozenset({".png", ".jpg", ".jpeg", ".webp"})
-SUPPORTED_OUTPUT_EXTENSIONS = frozenset({".png", ".jpg", ".jpeg"})
+SUPPORTED_OUTPUT_EXTENSIONS = frozenset({".png", ".jpg", ".jpeg", ".webp"})
 
 
 @dataclass(frozen=True)

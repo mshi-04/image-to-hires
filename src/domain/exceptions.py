@@ -11,3 +11,7 @@ class UnsupportedScaleFactorError(DomainError):
 
 class UnsupportedImageFormatError(DomainError):
     """Raised when an unsupported image format is requested."""
+
+
+class UnsupportedDenoiseLevelError(DomainError):
+    """Raised when an unsupported denoise level is requested."""
