@@ -56,7 +56,7 @@ class TestDomainServicesAndUseCase(unittest.TestCase):
         output = build_default_output_path(input_image, scale_factor, denoise_level)
 
         # Assert
-        self.assertEqual(output.value, Path("C:/images/cat-denoise(2)x-up(4)x.png"))
+        self.assertEqual(output.value, Path("C:/images/cat-denoise(2)x-up(4)x.webp"))
 
     def test_run_upscale_usecase_runs_engine_and_saves_output(self) -> None:
         # Arrange
@@ -127,7 +127,7 @@ class TestDomainServicesAndUseCase(unittest.TestCase):
             [
                 Path("C:/images/ok-denoise(3)x-up(2)x.png"),
                 Path("C:/images/fail-denoise(3)x-up(2)x.png"),
-                Path("C:/images/ok2-denoise(3)x-up(2)x.png"),
+                Path("C:/images/ok2-denoise(3)x-up(2)x.webp"),
             ],
         )
         self.assertTrue(result.items[0].is_success)
@@ -154,7 +154,7 @@ class TestDomainServicesAndUseCase(unittest.TestCase):
                     Path("C:/images/ok2.webp"),
                     2,
                     3,
-                    Path("C:/images/ok2-denoise(3)x-up(2)x.png"),
+                    Path("C:/images/ok2-denoise(3)x-up(2)x.webp"),
                 ),
             ],
         )
@@ -162,7 +162,7 @@ class TestDomainServicesAndUseCase(unittest.TestCase):
             fake_storage.calls,
             [
                 (b"upscaled-image", Path("C:/images/ok-denoise(3)x-up(2)x.png")),
-                (b"upscaled-image", Path("C:/images/ok2-denoise(3)x-up(2)x.png")),
+                (b"upscaled-image", Path("C:/images/ok2-denoise(3)x-up(2)x.webp")),
             ],
         )
         self.assertEqual(
