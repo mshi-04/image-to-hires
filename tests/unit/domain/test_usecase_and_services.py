@@ -14,10 +14,10 @@ from src.domain.value_objects.scale_factor import ScaleFactor
 
 class FakeUpscaleEngine(UpscaleEnginePort):
     def __init__(self) -> None:
-        self.calls: list[tuple[str, int]] = []
+        self.calls: list[tuple[str, int, str]] = []
 
-    def upscale(self, input_image, scale_factor) -> bytes:  # type: ignore[override]
-        self.calls.append((str(input_image.value), scale_factor.value))
+    def upscale(self, input_image, scale_factor, output_image) -> bytes:  # type: ignore[override]
+        self.calls.append((str(input_image.value), scale_factor.value, str(output_image.value)))
         return b"upscaled-image"
 
 
@@ -50,7 +50,7 @@ class TestDomainServicesAndUseCase(unittest.TestCase):
             )
         )
 
-        self.assertEqual(fake_engine.calls, [("C:\\images\\input.png", 2)])
+        self.assertEqual(fake_engine.calls, [("C:\\images\\input.png", 2, "C:\\images\\output.png")])
         self.assertEqual(fake_storage.calls, [(b"upscaled-image", "C:\\images\\output.png")])
         self.assertEqual(result.scale_factor.value, 2)
         self.assertEqual(str(result.output_image_path.value), "C:\\images\\output.png")

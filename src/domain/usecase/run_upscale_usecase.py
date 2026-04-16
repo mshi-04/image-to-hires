@@ -43,7 +43,11 @@ class RunUpscaleUseCase:
             scale_factor=scale_factor,
         )
 
-        upscaled_image = self._upscale_engine.upscale(job.input_image, job.scale_factor)
+        upscaled_image = self._upscale_engine.upscale(
+            job.input_image,
+            job.scale_factor,
+            job.output_image,
+        )
         self._image_storage.save(upscaled_image, job.output_image)
 
         return RunUpscaleResult(output_image_path=job.output_image, scale_factor=job.scale_factor)
