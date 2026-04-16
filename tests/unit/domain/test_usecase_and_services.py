@@ -8,16 +8,17 @@ from src.domain.usecase.run_upscale_usecase import (
     RunUpscaleCommand,
     RunUpscaleUseCase,
 )
-from src.domain.value_objects.image_path import InputImagePath
+from src.domain.entities.upscale_job import UpscaleJob
+from src.domain.value_objects.image_path import InputImagePath, OutputImagePath
 from src.domain.value_objects.scale_factor import ScaleFactor
 
 
 class FakeUpscaleEngine(UpscaleEnginePort):
     def __init__(self) -> None:
-        self.calls: list[tuple[Path, int]] = []
+        self.calls: list[tuple[Path, int, Path]] = []
 
-    def upscale(self, input_image, scale_factor) -> bytes:  # type: ignore[override]
-        self.calls.append((input_image.value, scale_factor.value))
+    def upscale(self, job: UpscaleJob) -> bytes:
+        self.calls.append((job.input_image.value, job.scale_factor.value, job.output_image.value))
         return b"upscaled-image"
 
 
@@ -25,7 +26,7 @@ class FakeImageStorage(ImageStoragePort):
     def __init__(self) -> None:
         self.calls: list[tuple[bytes, Path]] = []
 
-    def save(self, image_bytes, output_image) -> None:  # type: ignore[override]
+    def save(self, image_bytes: bytes, output_image: OutputImagePath) -> None:
         self.calls.append((image_bytes, output_image.value))
 
 
@@ -50,7 +51,10 @@ class TestDomainServicesAndUseCase(unittest.TestCase):
             )
         )
 
-        self.assertEqual(fake_engine.calls, [(Path("C:/images/input.png"), 2)])
+        self.assertEqual(
+            fake_engine.calls,
+            [(Path("C:/images/input.png"), 2, Path("C:/images/output.png"))],
+        )
         self.assertEqual(fake_storage.calls, [(b"upscaled-image", Path("C:/images/output.png"))])
         self.assertEqual(result.scale_factor.value, 2)
         self.assertEqual(result.output_image_path.value, Path("C:/images/output.png"))
