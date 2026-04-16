@@ -48,6 +48,11 @@
 - `docs/implementation-plan.md`
 - 実装フェーズ、優先順位、判断基準、将来タスクを整理する文書
 
+### セットアップ
+
+- `docs/setup.md`
+- モデル配置、成果物ディレクトリ、開発開始前の準備手順を整理する文書
+
 ### サブエージェント運用
 
 - `docs/subagent-guide.md`
@@ -74,6 +79,7 @@
 - 技術選定や外部モデルの扱いを確認したいときは `docs/technical-design.md` を読む
 - ファイル構成や責務の切り方を確認したいときは `docs/architecture.md` を読む
 - 着手順や実装順序を確認したいときは `docs/implementation-plan.md` を読む
+- 開発環境の準備やモデル配置を確認したいときは `docs/setup.md` を読む
 - サブエージェントをどう使うか確認したいときは `docs/subagent-guide.md` を読む
 - コードの書き方を確認したいときは `docs/coding-standards.md` を読む
 - UnitTest の書き方を確認したいときは `docs/unit-test-guidelines.md` を読む
@@ -85,6 +91,7 @@
 - 技術選定を変えたら `docs/technical-design.md` を更新する
 - 構造を変えたら `docs/architecture.md` を更新する
 - 進め方を変えたら `docs/implementation-plan.md` を更新する
+- セットアップ手順を変えたら `docs/setup.md` を更新する
 - サブエージェント運用を変えたら `docs/subagent-guide.md` を更新する
 - コーディング規約を変えたら `docs/coding-standards.md` を更新する
 - UnitTest 方針を変えたら `docs/unit-test-guidelines.md` を更新する

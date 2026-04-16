@@ -83,9 +83,13 @@ MVP 前提として、単一画像処理、`2x / 3x / 4x`、Windows + NVIDIA GPU
 
 ## 8. 文書整合の確認
 
+- 目的や MVP 範囲変更なら `docs/overview.md` が更新されているか
 - 仕様変更なら `docs/requirements.md` が更新されているか
 - 技術方針変更なら `docs/technical-design.md` が更新されているか
 - 構造変更なら `docs/architecture.md` が更新されているか
+- 実装計画変更なら `docs/implementation-plan.md` が更新されているか
+- セットアップ手順変更なら `docs/setup.md` が更新されているか
+- サブエージェント運用変更なら `docs/subagent-guide.md` が更新されているか
 - 実装ルール変更なら `docs/coding-standards.md` が更新されているか
 - テスト方針変更なら `docs/unit-test-guidelines.md` が更新されているか
 - 入口や文書マップに影響があるなら `AGENTS.md` が更新されているか
