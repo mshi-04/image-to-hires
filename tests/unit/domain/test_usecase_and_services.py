@@ -14,19 +14,19 @@ from src.domain.value_objects.scale_factor import ScaleFactor
 
 class FakeUpscaleEngine(UpscaleEnginePort):
     def __init__(self) -> None:
-        self.calls: list[tuple[str, int]] = []
+        self.calls: list[tuple[Path, int]] = []
 
     def upscale(self, input_image, scale_factor) -> bytes:  # type: ignore[override]
-        self.calls.append((str(input_image.value), scale_factor.value))
+        self.calls.append((input_image.value, scale_factor.value))
         return b"upscaled-image"
 
 
 class FakeImageStorage(ImageStoragePort):
     def __init__(self) -> None:
-        self.calls: list[tuple[bytes, str]] = []
+        self.calls: list[tuple[bytes, Path]] = []
 
     def save(self, image_bytes, output_image) -> None:  # type: ignore[override]
-        self.calls.append((image_bytes, str(output_image.value)))
+        self.calls.append((image_bytes, output_image.value))
 
 
 class TestDomainServicesAndUseCase(unittest.TestCase):
@@ -35,7 +35,7 @@ class TestDomainServicesAndUseCase(unittest.TestCase):
             InputImagePath(Path("C:/images/cat.png")),
             scale_factor=ScaleFactor(4),
         )
-        self.assertEqual(str(output.value), "C:\\images\\cat_x4.png")
+        self.assertEqual(output.value, Path("C:/images/cat_x4.png"))
 
     def test_run_upscale_usecase_runs_engine_and_saves_output(self) -> None:
         fake_engine = FakeUpscaleEngine()
@@ -50,10 +50,10 @@ class TestDomainServicesAndUseCase(unittest.TestCase):
             )
         )
 
-        self.assertEqual(fake_engine.calls, [("C:\\images\\input.png", 2)])
-        self.assertEqual(fake_storage.calls, [(b"upscaled-image", "C:\\images\\output.png")])
+        self.assertEqual(fake_engine.calls, [(Path("C:/images/input.png"), 2)])
+        self.assertEqual(fake_storage.calls, [(b"upscaled-image", Path("C:/images/output.png"))])
         self.assertEqual(result.scale_factor.value, 2)
-        self.assertEqual(str(result.output_image_path.value), "C:\\images\\output.png")
+        self.assertEqual(result.output_image_path.value, Path("C:/images/output.png"))
 
 
 if __name__ == "__main__":
