@@ -13,4 +13,4 @@
 
 ## 3. 前提
 
-- 単一画像、2x / 3x / 4x、Windows + NVIDIA GPU を前提にする
+- 複数画像の順次処理、2x / 3x / 4x、Windows + NVIDIA GPU を前提にする
