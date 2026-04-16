@@ -58,6 +58,18 @@ class TestDomainServicesAndUseCase(unittest.TestCase):
         # Assert
         self.assertEqual(output.value, Path("C:/images/cat-denoise(2)x-up(4)x.webp"))
 
+    def test_build_default_output_path_normalizes_uppercase_extension_to_lowercase(self) -> None:
+        # Arrange
+        input_image = InputImagePath(Path("C:/images/cat.JPG"))
+        scale_factor = ScaleFactor(3)
+        denoise_level = DenoiseLevel(1)
+
+        # Act
+        output = build_default_output_path(input_image, scale_factor, denoise_level)
+
+        # Assert
+        self.assertEqual(output.value, Path("C:/images/cat-denoise(1)x-up(3)x.jpg"))
+
     def test_run_upscale_usecase_runs_engine_and_saves_output(self) -> None:
         # Arrange
         fake_engine = FakeUpscaleEngine()

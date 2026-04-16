@@ -2,7 +2,6 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from src.domain.entities.upscale_job import UpscaleJob
 from src.domain.ports.image_storage_port import ImageStoragePort
 from src.domain.ports.upscale_engine_port import UpscaleEnginePort
 from src.domain.services.output_path_service import build_default_output_path
@@ -82,23 +81,17 @@ class RunUpscaleBatchUseCase:
                     output_image = build_default_output_path(input_image, scale_factor, denoise_level)
 
                 output_image_path = output_image.value
-                job = UpscaleJob(
-                    input_image=input_image,
-                    output_image=output_image,
-                    scale_factor=scale_factor,
-                    denoise_level=denoise_level,
-                )
                 single_usecase.execute(
                     RunUpscaleCommand(
-                        input_image_path=job.input_image.value,
-                        output_image_path=job.output_image.value,
-                        scale_factor=job.scale_factor.value,
-                        denoise_level=job.denoise_level.value,
+                        input_image_path=input_image.value,
+                        output_image_path=output_image.value,
+                        scale_factor=scale_factor.value,
+                        denoise_level=denoise_level.value,
                     )
                 )
                 item_result = UpscaleBatchItemResult(
                     input_image_path=input_image.value,
-                    output_image_path=job.output_image.value,
+                    output_image_path=output_image.value,
                     scale_factor=scale_factor,
                     denoise_level=denoise_level,
                 )
