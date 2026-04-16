@@ -1,0 +1,60 @@
+import unittest
+from pathlib import Path
+
+from src.domain.ports.image_storage_port import ImageStoragePort
+from src.domain.ports.upscale_engine_port import UpscaleEnginePort
+from src.domain.services.output_path_service import build_default_output_path
+from src.domain.usecase.run_upscale_usecase import (
+    RunUpscaleCommand,
+    RunUpscaleUseCase,
+)
+from src.domain.value_objects.image_path import InputImagePath
+from src.domain.value_objects.scale_factor import ScaleFactor
+
+
+class FakeUpscaleEngine(UpscaleEnginePort):
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, int]] = []
+
+    def upscale(self, input_image, scale_factor) -> bytes:  # type: ignore[override]
+        self.calls.append((str(input_image.value), scale_factor.value))
+        return b"upscaled-image"
+
+
+class FakeImageStorage(ImageStoragePort):
+    def __init__(self) -> None:
+        self.calls: list[tuple[bytes, str]] = []
+
+    def save(self, image_bytes, output_image) -> None:  # type: ignore[override]
+        self.calls.append((image_bytes, str(output_image.value)))
+
+
+class TestDomainServicesAndUseCase(unittest.TestCase):
+    def test_build_default_output_path_appends_scale_suffix(self) -> None:
+        output = build_default_output_path(
+            InputImagePath(Path("C:/images/cat.png")),
+            scale_factor=ScaleFactor(4),
+        )
+        self.assertEqual(str(output.value), "C:\\images\\cat_x4.png")
+
+    def test_run_upscale_usecase_runs_engine_and_saves_output(self) -> None:
+        fake_engine = FakeUpscaleEngine()
+        fake_storage = FakeImageStorage()
+        usecase = RunUpscaleUseCase(upscale_engine=fake_engine, image_storage=fake_storage)
+
+        result = usecase.execute(
+            RunUpscaleCommand(
+                input_image_path=Path("C:/images/input.png"),
+                output_image_path=Path("C:/images/output.png"),
+                scale_factor=2,
+            )
+        )
+
+        self.assertEqual(fake_engine.calls, [("C:\\images\\input.png", 2)])
+        self.assertEqual(fake_storage.calls, [(b"upscaled-image", "C:\\images\\output.png")])
+        self.assertEqual(result.scale_factor.value, 2)
+        self.assertEqual(str(result.output_image_path.value), "C:\\images\\output.png")
+
+
+if __name__ == "__main__":
+    unittest.main()

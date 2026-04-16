@@ -1,0 +1,49 @@
+from dataclasses import dataclass
+from pathlib import Path
+
+from src.domain.entities.upscale_job import UpscaleJob
+from src.domain.ports.image_storage_port import ImageStoragePort
+from src.domain.ports.upscale_engine_port import UpscaleEnginePort
+from src.domain.value_objects.image_path import InputImagePath, OutputImagePath
+from src.domain.value_objects.scale_factor import ScaleFactor
+
+
+@dataclass(frozen=True)
+class RunUpscaleCommand:
+    """Input payload for the upscaling use case."""
+
+    input_image_path: Path | str
+    output_image_path: Path | str
+    scale_factor: int
+
+
+@dataclass(frozen=True)
+class RunUpscaleResult:
+    """Output payload for the upscaling use case."""
+
+    output_image_path: OutputImagePath
+    scale_factor: ScaleFactor
+
+
+class RunUpscaleUseCase:
+    """Execute the upscaling flow for a single image."""
+
+    def __init__(self, upscale_engine: UpscaleEnginePort, image_storage: ImageStoragePort) -> None:
+        self._upscale_engine = upscale_engine
+        self._image_storage = image_storage
+
+    def execute(self, command: RunUpscaleCommand) -> RunUpscaleResult:
+        input_image = InputImagePath(Path(command.input_image_path))
+        output_image = OutputImagePath(Path(command.output_image_path))
+        scale_factor = ScaleFactor(command.scale_factor)
+
+        job = UpscaleJob(
+            input_image=input_image,
+            output_image=output_image,
+            scale_factor=scale_factor,
+        )
+
+        upscaled_image = self._upscale_engine.upscale(job.input_image, job.scale_factor)
+        self._image_storage.save(upscaled_image, job.output_image)
+
+        return RunUpscaleResult(output_image_path=job.output_image, scale_factor=job.scale_factor)
