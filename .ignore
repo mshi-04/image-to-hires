@@ -1,0 +1,3 @@
+# Exclude Python bytecode caches from local search/exploration tools.
+__pycache__/
+**/__pycache__/
