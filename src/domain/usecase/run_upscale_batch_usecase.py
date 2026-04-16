@@ -75,7 +75,7 @@ class RunUpscaleBatchUseCase:
             try:
                 input_image = InputImagePath(Path(input_image_path))
                 output_candidate = output_image_paths[index] if output_image_paths is not None else None
-                if output_candidate:
+                if output_candidate is not None:
                     output_image = OutputImagePath(Path(output_candidate))
                 else:
                     output_image = build_default_output_path(input_image, scale_factor, denoise_level)

@@ -13,6 +13,7 @@ from src.domain.usecase.run_upscale_usecase import (
     RunUpscaleCommand,
     RunUpscaleUseCase,
 )
+from src.domain.exceptions import UnsupportedImageFormatError
 from src.domain.value_objects.denoise_level import DenoiseLevel
 from src.domain.value_objects.image_path import InputImagePath, OutputImagePath
 from src.domain.value_objects.scale_factor import ScaleFactor
@@ -202,6 +203,27 @@ class TestDomainServicesAndUseCase(unittest.TestCase):
                     denoise_level=0,
                 )
             )
+
+    def test_run_upscale_batch_usecase_treats_empty_output_path_as_invalid(self) -> None:
+        # Arrange
+        fake_engine = FakeUpscaleEngine()
+        fake_storage = FakeImageStorage()
+        usecase = RunUpscaleBatchUseCase(upscale_engine=fake_engine, image_storage=fake_storage)
+
+        # Act
+        result = usecase.execute(
+            RunUpscaleBatchCommand(
+                input_image_paths=[Path("C:/images/one.png")],
+                output_image_paths=[""],
+                scale_factor=2,
+                denoise_level=0,
+            )
+        )
+
+        # Assert
+        self.assertEqual(result.failure_count, 1)
+        self.assertFalse(result.items[0].is_success)
+        self.assertIsInstance(result.items[0].error, UnsupportedImageFormatError)
 
 
 if __name__ == "__main__":
