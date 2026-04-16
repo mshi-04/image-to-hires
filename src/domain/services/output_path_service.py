@@ -15,5 +15,5 @@ def build_default_output_path(
     stem = input_image.value.stem
     parent = input_image.value.parent
     suffix = input_image.value.suffix.lower()
-    output_path = parent / f"{stem}-denoise({denoise_level.value})x-up({scale_factor.value})x{suffix}"
+    output_path = parent / f"{stem}-denoise{denoise_level.value}x-up{scale_factor.value}x{suffix}"
     return OutputImagePath(Path(output_path))
