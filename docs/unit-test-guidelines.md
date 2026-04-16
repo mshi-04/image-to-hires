@@ -169,4 +169,4 @@ tests/
 
 ## 17. 文書更新ルール
 
-UnitTest の方針を変えた場合は、この文書と `AGENTS.md` の文書マップを一緒に更新する。
+UnitTest の方針を変えた場合は、この文書・`docs/rules/unit-test-guidelines.md`・`AGENTS.md` の文書マップを一緒に更新する。
