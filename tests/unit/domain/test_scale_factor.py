@@ -6,13 +6,21 @@ from src.domain.value_objects.scale_factor import ScaleFactor
 
 class TestScaleFactor(unittest.TestCase):
     def test_scale_factor_accepts_supported_values(self) -> None:
-        self.assertEqual(ScaleFactor(2).value, 2)
-        self.assertEqual(ScaleFactor(3).value, 3)
-        self.assertEqual(ScaleFactor(4).value, 4)
+        for value in [2, 3, 4]:
+            with self.subTest(value=value):
+                self.assertEqual(ScaleFactor(value).value, value)
 
     def test_scale_factor_rejects_unsupported_value(self) -> None:
         with self.assertRaises(UnsupportedScaleFactorError):
             ScaleFactor(5)
+
+    def test_scale_factor_rejects_non_integer_number(self) -> None:
+        with self.assertRaises(UnsupportedScaleFactorError):
+            ScaleFactor(2.0)  # type: ignore[arg-type]
+
+    def test_scale_factor_rejects_bool(self) -> None:
+        with self.assertRaises(UnsupportedScaleFactorError):
+            ScaleFactor(True)  # type: ignore[arg-type]
 
 
 if __name__ == "__main__":

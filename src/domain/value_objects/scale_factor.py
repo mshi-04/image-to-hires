@@ -13,6 +13,11 @@ class ScaleFactor:
     value: int
 
     def __post_init__(self) -> None:
+        if not isinstance(self.value, int) or isinstance(self.value, bool):
+            raise UnsupportedScaleFactorError(
+                f"Scale factor must be an integer. Got: {self.value!r}."
+            )
+
         if self.value not in SUPPORTED_SCALE_FACTORS:
             supported_values = ", ".join(str(value) for value in sorted(SUPPORTED_SCALE_FACTORS))
             raise UnsupportedScaleFactorError(
