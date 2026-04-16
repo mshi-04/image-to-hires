@@ -1,10 +1,6 @@
 # UnitTest 方針
 
-## Rules
-
-- UnitTest は契約、分岐、状態遷移を守るために書く
-- GPU 実機依存は最小化し、通常は CPU で回る境界テストを優先する
-- 振る舞いを変えたら対応する正常系または失敗系のテストを追加する
+対応する Rules は `docs/rules/unit-test-guidelines.md` を参照する。
 
 ## 1. 目的
 

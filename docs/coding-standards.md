@@ -1,10 +1,6 @@
 # コーディング規約
 
-## Rules
-
-- 実装の近道より責務分離と一貫性を優先する
-- 同じ意味の処理経路を増やさず、ガード節で分岐を浅く保つ
-- 規約を変えたら `docs/architecture.md` と `docs/unit-test-guidelines.md` も確認する
+対応する Rules は `docs/rules/coding-standards.md` を参照する。
 
 ## 1. 目的
 

@@ -4,7 +4,7 @@
 
 このファイルは、このリポジトリで AI エージェントや実装者が最初に見る文書の入口です。
 
-詳細な方針や仕様は個別文書に分けて記載します。ここには前提、文書の地図、最小限の横断ルールだけを書きます。
+詳細な方針や仕様は個別文書に分けて記載します。ここには前提と文書の地図だけを書きます。
 
 ## 前提
 
@@ -33,9 +33,10 @@
 - `docs/review-guide.md`: PR レビュー時の観点、優先順位、確認手順
 - `docs/git-guidelines.md`: コミット、PR、レビュー応答、CodeRabbit 対応の運用
 
-## 横断 Rules
+## Rules 文書
 
-- MVP の範囲を勝手に広げない
-- 変更内容に対応する文書を更新する
-- 文書同士の内容がずれたら、その場で整合を取る
-- 詳細な判断は各文書の `Rules` を優先する
+- `docs/rules/requirements.md`: 要件定義時の判断基準
+- `docs/rules/coding-standards.md`: 実装時の判断基準
+- `docs/rules/unit-test-guidelines.md`: UnitTest 作成時の判断基準
+- `docs/rules/review-guide.md`: レビュー時の判断基準
+- `docs/rules/git-guidelines.md`: Git と CodeRabbit 対応時の判断基準
