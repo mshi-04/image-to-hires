@@ -1,5 +1,11 @@
 # プロジェクト概要
 
+## Rules
+
+- この文書では目的、MVP 範囲、大方針だけを決める
+- 実装詳細や技術詳細は `docs/technical-design.md` と `docs/architecture.md` に分ける
+- 目的や MVP の境界を変えたら `docs/requirements.md` を含む関連文書も更新する
+
 ## 目的
 
 このプロジェクトは、単一の画像を AI で高品質に 2 倍、3 倍、4 倍へ拡大する Windows 向け GUI アプリを作るためのものです。

@@ -1,5 +1,11 @@
 # レビューガイド
 
+## Rules
+
+- レビューはバグ、回帰、設計崩れを最優先に見る
+- 指摘は `Critical / Suggestion / Nitpick` に分類する
+- Git 上のコメント運用と返信手順は `docs/git-guidelines.md` に従う
+
 ## 1. 目的
 
 この文書は、このリポジトリでレビューするときに何を優先して見るかを定めるものです。
@@ -92,6 +98,7 @@ MVP 前提として、単一画像処理、`2x / 3x / 4x`、Windows + NVIDIA GPU
 - サブエージェント運用変更なら `docs/subagent-guide.md` が更新されているか
 - 実装ルール変更なら `docs/coding-standards.md` が更新されているか
 - テスト方針変更なら `docs/unit-test-guidelines.md` が更新されているか
+- Git 運用変更なら `docs/git-guidelines.md` が更新されているか
 - 入口や文書マップに影響があるなら `AGENTS.md` が更新されているか
 
 ## 9. 見落としやすい点
