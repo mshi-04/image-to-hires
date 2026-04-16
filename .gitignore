@@ -30,7 +30,7 @@ htmlcov/
 .ipynb_checkpoints/
 
 # IDE and editor
-.vscode/
+.vscode/*
 !.vscode/extensions.json
 !.vscode/settings.json
 !.vscode/tasks.json
