@@ -5,6 +5,7 @@ from pathlib import Path
 
 from src.domain.value_objects.image_path import InputImagePath, OutputImagePath
 from src.domain.value_objects.scale_factor import ScaleFactor
+from src.domain.entities.upscale_job import UpscaleJob
 from src.infrastructure.inference.pillow_upscale_engine import PillowUpscaleEngine
 
 try:
@@ -25,11 +26,11 @@ class TestPillowUpscaleEngine(unittest.TestCase):
             output_path = Path(tmp_dir) / "output.png"
 
             engine = PillowUpscaleEngine()
-            result_bytes = engine.upscale(
+            result_bytes = engine.upscale(UpscaleJob(
                 InputImagePath(input_path),
-                ScaleFactor(4),
                 OutputImagePath(output_path),
-            )
+                ScaleFactor(4),
+            ))
 
             self.assertTrue(result_bytes)
             with Image.open(BytesIO(result_bytes)) as output_image:
@@ -43,11 +44,11 @@ class TestPillowUpscaleEngine(unittest.TestCase):
             output_path = Path(tmp_dir) / "output.jpg"
 
             engine = PillowUpscaleEngine()
-            result_bytes = engine.upscale(
+            result_bytes = engine.upscale(UpscaleJob(
                 InputImagePath(input_path),
-                ScaleFactor(2),
                 OutputImagePath(output_path),
-            )
+                ScaleFactor(2),
+            ))
 
             with Image.open(BytesIO(result_bytes)) as output_image:
                 self.assertEqual(output_image.size, (4, 4))
@@ -60,11 +61,11 @@ class TestPillowUpscaleEngine(unittest.TestCase):
             engine = PillowUpscaleEngine()
 
             with self.assertRaises(FileNotFoundError):
-                engine.upscale(
+                engine.upscale(UpscaleJob(
                     InputImagePath(missing_path),
-                    ScaleFactor(2),
                     OutputImagePath(output_path),
-                )
+                    ScaleFactor(2),
+                ))
 
     def test_upscale_applies_exif_orientation_before_resizing(self) -> None:
         if not hasattr(Image, "Exif"):
@@ -79,11 +80,11 @@ class TestPillowUpscaleEngine(unittest.TestCase):
             Image.new("RGB", (2, 3), color=(10, 20, 30)).save(input_path, format="JPEG", exif=exif)
 
             engine = PillowUpscaleEngine()
-            result_bytes = engine.upscale(
+            result_bytes = engine.upscale(UpscaleJob(
                 InputImagePath(input_path),
-                ScaleFactor(2),
                 OutputImagePath(output_path),
-            )
+                ScaleFactor(2),
+            ))
 
             with Image.open(BytesIO(result_bytes)) as output_image:
                 self.assertEqual(output_image.size, (6, 4))

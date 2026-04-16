@@ -1,21 +1,15 @@
 from io import BytesIO
 from pathlib import Path
 
+from src.domain.entities.upscale_job import UpscaleJob
 from src.domain.ports.upscale_engine_port import UpscaleEnginePort
-from src.domain.value_objects.image_path import InputImagePath, OutputImagePath
-from src.domain.value_objects.scale_factor import ScaleFactor
 
 
 class PillowUpscaleEngine(UpscaleEnginePort):
     """Simple image upscaler backed by Pillow."""
 
-    def upscale(
-        self,
-        input_image: InputImagePath,
-        scale_factor: ScaleFactor,
-        output_image: OutputImagePath,
-    ) -> bytes:
-        image_path = Path(input_image.value)
+    def upscale(self, job: UpscaleJob) -> bytes:
+        image_path = Path(job.input_image.value)
         if not image_path.exists():
             raise FileNotFoundError(f"Input image file was not found: {image_path}")
 
@@ -26,10 +20,10 @@ class PillowUpscaleEngine(UpscaleEnginePort):
 
         with Image.open(image_path) as source_image:
             normalized_image = ImageOps.exif_transpose(source_image)
-            output_width = normalized_image.width * scale_factor.value
-            output_height = normalized_image.height * scale_factor.value
+            output_width = normalized_image.width * job.scale_factor.value
+            output_height = normalized_image.height * job.scale_factor.value
             upscaled_image = normalized_image.resize((output_width, output_height), Image.Resampling.LANCZOS)
-            output_format = self._resolve_output_format(Path(output_image.value).suffix.lower())
+            output_format = self._resolve_output_format(Path(job.output_image.value).suffix.lower())
 
             if output_format == "JPEG" and upscaled_image.mode in ("RGBA", "LA", "P"):
                 upscaled_image = upscaled_image.convert("RGB")
