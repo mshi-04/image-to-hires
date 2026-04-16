@@ -14,7 +14,7 @@ class PillowUpscaleEngine(UpscaleEnginePort):
             raise FileNotFoundError(f"Input image file was not found: {image_path}")
 
         try:
-            from PIL import Image, ImageFilter, ImageOps
+            from PIL import Image, ImageOps
         except ModuleNotFoundError as exc:
             raise RuntimeError("Pillow is required to run PillowUpscaleEngine.") from exc
 
@@ -23,7 +23,6 @@ class PillowUpscaleEngine(UpscaleEnginePort):
             denoised_image = self._apply_denoise_filter(
                 normalized_image,
                 denoise_level=job.denoise_level.value,
-                image_filter=ImageFilter,
             )
 
             output_width = denoised_image.width * job.scale_factor.value
@@ -32,7 +31,7 @@ class PillowUpscaleEngine(UpscaleEnginePort):
             output_format = self._resolve_output_format(Path(job.output_image.value).suffix.lower())
 
             if output_format == "JPEG":
-                upscaled_image = self._prepare_for_jpeg(upscaled_image, image_module=Image)
+                upscaled_image = self._prepare_for_jpeg(upscaled_image)
 
             buffer = BytesIO()
             upscaled_image.save(buffer, format=output_format)
@@ -49,23 +48,24 @@ class PillowUpscaleEngine(UpscaleEnginePort):
         raise ValueError(f"Unsupported output extension for PillowUpscaleEngine: {extension}")
 
     @staticmethod
-    def _apply_denoise_filter(image, denoise_level: int, image_filter):
+    def _apply_denoise_filter(image, denoise_level: int):
+        from PIL import ImageFilter
+
         median_filter_sizes = {1: 3, 2: 5, 3: 7}
         filter_size = median_filter_sizes.get(denoise_level)
         if filter_size is None:
             return image
-        return image.filter(image_filter.MedianFilter(size=filter_size))
+        return image.filter(ImageFilter.MedianFilter(size=filter_size))
 
     @staticmethod
-    def _prepare_for_jpeg(image, image_module):
+    def _prepare_for_jpeg(image):
         if image.mode in ("RGBA", "LA"):
-            return PillowUpscaleEngine._composite_on_white_background(image.convert("RGBA"), image_module)
+            return PillowUpscaleEngine._composite_on_white_background(image.convert("RGBA"))
 
         if image.mode == "P":
             if "transparency" in image.info:
                 return PillowUpscaleEngine._composite_on_white_background(
                     image.convert("RGBA"),
-                    image_module,
                 )
             return image.convert("RGB")
 
@@ -75,7 +75,9 @@ class PillowUpscaleEngine(UpscaleEnginePort):
         return image
 
     @staticmethod
-    def _composite_on_white_background(image_rgba, image_module):
-        white_background = image_module.new("RGBA", image_rgba.size, (255, 255, 255, 255))
-        composited = image_module.alpha_composite(white_background, image_rgba)
+    def _composite_on_white_background(image_rgba):
+        from PIL import Image
+
+        white_background = Image.new("RGBA", image_rgba.size, (255, 255, 255, 255))
+        composited = Image.alpha_composite(white_background, image_rgba)
         return composited.convert("RGB")

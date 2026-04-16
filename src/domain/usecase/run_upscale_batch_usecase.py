@@ -41,7 +41,7 @@ class UpscaleBatchItemResult:
 class RunUpscaleBatchResult:
     """Aggregated result for batch upscaling."""
 
-    items: list[UpscaleBatchItemResult]
+    items: tuple[UpscaleBatchItemResult, ...]
     processed_count: int
     success_count: int
     failure_count: int
@@ -103,7 +103,8 @@ class RunUpscaleBatchUseCase:
                     denoise_level=denoise_level,
                 )
                 success_count += 1
-            except Exception as exc:
+            # Intentionally catch per-item errors so batch processing can continue.
+            except Exception as exc:  # noqa: BLE001
                 item_result = UpscaleBatchItemResult(
                     input_image_path=Path(input_image_path),
                     output_image_path=output_image_path,
@@ -118,7 +119,7 @@ class RunUpscaleBatchUseCase:
                 progress_callback(item_result, index + 1, total_count)
 
         return RunUpscaleBatchResult(
-            items=item_results,
+            items=tuple(item_results),
             processed_count=len(item_results),
             success_count=success_count,
             failure_count=failure_count,

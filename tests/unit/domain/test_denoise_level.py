@@ -19,15 +19,31 @@ class TestDenoiseLevel(unittest.TestCase):
         with self.assertRaises(UnsupportedDenoiseLevelError):
             DenoiseLevel(4)
 
+    def test_denoise_level_rejects_negative_value(self) -> None:
+        # Arrange / Act / Assert
+        with self.assertRaises(UnsupportedDenoiseLevelError):
+            DenoiseLevel(-1)
+
     def test_denoise_level_rejects_non_integer_number(self) -> None:
         # Arrange / Act / Assert
         with self.assertRaises(UnsupportedDenoiseLevelError):
             DenoiseLevel(1.5)  # type: ignore[arg-type]
 
+    def test_denoise_level_rejects_non_number(self) -> None:
+        # Arrange / Act / Assert
+        with self.assertRaises(UnsupportedDenoiseLevelError):
+            DenoiseLevel(None)  # type: ignore[arg-type]
+
+        with self.assertRaises(UnsupportedDenoiseLevelError):
+            DenoiseLevel("1")  # type: ignore[arg-type]
+
     def test_denoise_level_rejects_bool(self) -> None:
         # Arrange / Act / Assert
         with self.assertRaises(UnsupportedDenoiseLevelError):
             DenoiseLevel(False)  # type: ignore[arg-type]
+
+        with self.assertRaises(UnsupportedDenoiseLevelError):
+            DenoiseLevel(True)  # type: ignore[arg-type]
 
 
 if __name__ == "__main__":

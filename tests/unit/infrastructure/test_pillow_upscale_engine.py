@@ -33,10 +33,10 @@ class TestPillowUpscaleEngine(unittest.TestCase):
             # Act
             result_bytes = engine.upscale(
                 UpscaleJob(
-                    InputImagePath(input_path),
-                    OutputImagePath(output_path),
-                    ScaleFactor(4),
-                    DenoiseLevel(0),
+                    input_image=InputImagePath(input_path),
+                    output_image=OutputImagePath(output_path),
+                    scale_factor=ScaleFactor(4),
+                    denoise_level=DenoiseLevel(0),
                 )
             )
 
@@ -57,10 +57,10 @@ class TestPillowUpscaleEngine(unittest.TestCase):
             # Act
             result_bytes = engine.upscale(
                 UpscaleJob(
-                    InputImagePath(input_path),
-                    OutputImagePath(output_path),
-                    ScaleFactor(2),
-                    DenoiseLevel(0),
+                    input_image=InputImagePath(input_path),
+                    output_image=OutputImagePath(output_path),
+                    scale_factor=ScaleFactor(2),
+                    denoise_level=DenoiseLevel(0),
                 )
             )
 
@@ -80,10 +80,10 @@ class TestPillowUpscaleEngine(unittest.TestCase):
             # Act
             result_bytes = engine.upscale(
                 UpscaleJob(
-                    InputImagePath(input_path),
-                    OutputImagePath(output_path),
-                    ScaleFactor(3),
-                    DenoiseLevel(0),
+                    input_image=InputImagePath(input_path),
+                    output_image=OutputImagePath(output_path),
+                    scale_factor=ScaleFactor(3),
+                    denoise_level=DenoiseLevel(0),
                 )
             )
 
@@ -103,10 +103,10 @@ class TestPillowUpscaleEngine(unittest.TestCase):
             with self.assertRaises(FileNotFoundError):
                 engine.upscale(
                     UpscaleJob(
-                        InputImagePath(missing_path),
-                        OutputImagePath(output_path),
-                        ScaleFactor(2),
-                        DenoiseLevel(0),
+                        input_image=InputImagePath(missing_path),
+                        output_image=OutputImagePath(output_path),
+                        scale_factor=ScaleFactor(2),
+                        denoise_level=DenoiseLevel(0),
                     )
                 )
 
@@ -126,10 +126,10 @@ class TestPillowUpscaleEngine(unittest.TestCase):
             # Act
             result_bytes = engine.upscale(
                 UpscaleJob(
-                    InputImagePath(input_path),
-                    OutputImagePath(output_path),
-                    ScaleFactor(2),
-                    DenoiseLevel(0),
+                    input_image=InputImagePath(input_path),
+                    output_image=OutputImagePath(output_path),
+                    scale_factor=ScaleFactor(2),
+                    denoise_level=DenoiseLevel(0),
                 )
             )
 
@@ -150,10 +150,10 @@ class TestPillowUpscaleEngine(unittest.TestCase):
                 # Act
                 engine.upscale(
                     UpscaleJob(
-                        InputImagePath(input_path),
-                        OutputImagePath(output_path),
-                        ScaleFactor(2),
-                        DenoiseLevel(2),
+                        input_image=InputImagePath(input_path),
+                        output_image=OutputImagePath(output_path),
+                        scale_factor=ScaleFactor(2),
+                        denoise_level=DenoiseLevel(2),
                     )
                 )
 
@@ -172,10 +172,10 @@ class TestPillowUpscaleEngine(unittest.TestCase):
                 # Act
                 engine.upscale(
                     UpscaleJob(
-                        InputImagePath(input_path),
-                        OutputImagePath(output_path),
-                        ScaleFactor(2),
-                        DenoiseLevel(0),
+                        input_image=InputImagePath(input_path),
+                        output_image=OutputImagePath(output_path),
+                        scale_factor=ScaleFactor(2),
+                        denoise_level=DenoiseLevel(0),
                     )
                 )
 
@@ -193,10 +193,10 @@ class TestPillowUpscaleEngine(unittest.TestCase):
             # Act
             result_bytes = engine.upscale(
                 UpscaleJob(
-                    InputImagePath(input_path),
-                    OutputImagePath(output_path),
-                    ScaleFactor(2),
-                    DenoiseLevel(0),
+                    input_image=InputImagePath(input_path),
+                    output_image=OutputImagePath(output_path),
+                    scale_factor=ScaleFactor(2),
+                    denoise_level=DenoiseLevel(0),
                 )
             )
 
