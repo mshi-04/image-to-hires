@@ -16,7 +16,13 @@ except ModuleNotFoundError:
 
 
 class FakeBatchUseCase:
-    def execute(self, command, progress_callback=None):  # noqa: ANN001
+    def execute(self, command, item_started_callback=None, progress_callback=None):  # noqa: ANN001
+        if item_started_callback and command.input_image_paths:
+            item_started_callback(
+                Path(command.input_image_paths[0]),
+                1,
+                len(command.input_image_paths),
+            )
         if progress_callback and command.input_image_paths:
             progress_callback(
                 SimpleNamespace(

@@ -13,6 +13,7 @@ class UpscaleQueueWorker(QObject):
     """Run sequential upscale jobs off the UI thread."""
 
     batch_started = Signal(int)
+    item_started = Signal(str, int, int)
     item_progress = Signal(str, int, int, bool, str)
     batch_finished = Signal(int, int)
     batch_failed = Signal(str)
@@ -43,6 +44,7 @@ class UpscaleQueueWorker(QObject):
             )
             result = self._batch_usecase.execute(
                 command=command,
+                item_started_callback=self._emit_item_started,
                 progress_callback=self._emit_item_progress,
             )
             self.batch_finished.emit(result.success_count, result.failure_count)
@@ -70,3 +72,6 @@ class UpscaleQueueWorker(QObject):
             item_result.is_success,
             detail,
         )
+
+    def _emit_item_started(self, input_image_path: Path, processed_count: int, total_count: int) -> None:
+        self.item_started.emit(input_image_path.name, processed_count, total_count)

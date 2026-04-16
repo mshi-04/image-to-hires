@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from PySide6.QtCore import Qt, Slot
+from PySide6.QtCore import QThread, Qt, Slot
 from PySide6.QtWidgets import (
     QFileDialog,
     QFormLayout,
@@ -11,21 +11,18 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QPushButton,
     QPlainTextEdit,
-    QThread,
     QVBoxLayout,
     QWidget,
 )
 
 from src.domain.usecase.run_upscale_batch_usecase import RunUpscaleBatchUseCase
-from src.infrastructure.image_io.file_image_storage import FileImageStorage
-from src.infrastructure.inference.pillow_upscale_engine import PillowUpscaleEngine
 from src.ui.workers.upscale_queue_worker import UpscaleQueueWorker
 
 
 class MainWindow(QMainWindow):
     """Main application window for image upscaling."""
 
-    def __init__(self, batch_usecase: RunUpscaleBatchUseCase | None = None) -> None:
+    def __init__(self, batch_usecase: RunUpscaleBatchUseCase) -> None:
         super().__init__()
         self.setWindowTitle("Image To Hires")
         self.setMinimumSize(920, 720)
@@ -35,11 +32,6 @@ class MainWindow(QMainWindow):
         self._worker_thread: QThread | None = None
         self._worker: UpscaleQueueWorker | None = None
 
-        if batch_usecase is None:
-            batch_usecase = RunUpscaleBatchUseCase(
-                upscale_engine=PillowUpscaleEngine(),
-                image_storage=FileImageStorage(),
-            )
         self._batch_usecase = batch_usecase
 
         self._build_ui()
@@ -146,11 +138,7 @@ class MainWindow(QMainWindow):
         if not selected_files:
             return
 
-        self._selected_files = [Path(path) for path in selected_files]
-        self._update_file_display()
-        self._update_output_format_display()
-        self.result_label.setText("最終結果: 入力待機")
-        self._update_start_button_state()
+        self._set_selected_files([Path(path) for path in selected_files])
 
     @Slot()
     def _on_start_clicked(self) -> None:
@@ -177,6 +165,7 @@ class MainWindow(QMainWindow):
 
         thread.started.connect(worker.run)
         worker.batch_started.connect(self._on_batch_started)
+        worker.item_started.connect(self._on_item_started)
         worker.item_progress.connect(self._on_item_progress)
         worker.batch_finished.connect(self._on_batch_finished)
         worker.batch_failed.connect(self._on_batch_failed)
@@ -194,6 +183,11 @@ class MainWindow(QMainWindow):
         self.progress_label.setText(f"進行状況: 0/{total_count}")
         self.current_file_label.setText("現在処理中: 開始")
         self.result_label.setText("最終結果: 処理中")
+
+    @Slot(str, int, int)
+    def _on_item_started(self, file_name: str, processed_count: int, total_count: int) -> None:
+        self.progress_label.setText(f"進行状況: {max(processed_count - 1, 0)}/{total_count}")
+        self.current_file_label.setText(f"現在処理中: {file_name}")
 
     @Slot(str, int, int, bool, str)
     def _on_item_progress(
@@ -260,8 +254,16 @@ class MainWindow(QMainWindow):
     def _update_start_button_state(self) -> None:
         self.start_button.setEnabled(bool(self._selected_files) and not self._is_running)
 
+    def _set_selected_files(self, files: list[Path]) -> None:
+        self._selected_files = files
+        self._update_file_display()
+        self._update_output_format_display()
+        self.result_label.setText("最終結果: 入力待機")
+        self._update_start_button_state()
+
     def closeEvent(self, event) -> None:
         if self._worker_thread is not None and self._worker_thread.isRunning():
-            self._worker_thread.quit()
-            self._worker_thread.wait(2000)
+            QMessageBox.information(self, "処理中", "処理中はウィンドウを閉じられません。完了後に閉じてください。")
+            event.ignore()
+            return
         super().closeEvent(event)
