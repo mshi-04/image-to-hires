@@ -21,6 +21,13 @@ except ModuleNotFoundError:
 
 
 class FakeBatchUseCase:
+    def __init__(self, runtime_error: Exception | None = None) -> None:
+        self.runtime_error = runtime_error
+
+    def ensure_runtime_ready(self) -> None:
+        if self.runtime_error is not None:
+            raise self.runtime_error
+
     def execute(self, command, item_started_callback=None, progress_callback=None):  # noqa: ANN001
         paths = [Path(p) for p in command.input_image_paths]
         scale = ScaleFactor(command.scale_factor)
@@ -114,6 +121,48 @@ class TestMainWindow(unittest.TestCase):
         # Assert
         self.assertFalse(running_state)
         self.assertTrue(completed_state)
+
+    def test_start_button_remains_disabled_until_worker_thread_cleanup(self) -> None:
+        # Arrange
+        self.window._selected_files = [Path.cwd() / "images" / "a.png"]
+        self.window._worker_thread = object()  # type: ignore[assignment]
+        self.window.select_button.setEnabled(False)
+        self.window._update_start_button_state()
+
+        # Act
+        self.window._on_batch_finished(1, 0)
+        state_before_cleanup = self.window.start_button.isEnabled()
+        select_before_cleanup = self.window.select_button.isEnabled()
+
+        self.window._on_worker_thread_finished()
+        state_after_cleanup = self.window.start_button.isEnabled()
+        select_after_cleanup = self.window.select_button.isEnabled()
+
+        # Assert
+        self.assertFalse(state_before_cleanup)
+        self.assertFalse(select_before_cleanup)
+        self.assertTrue(state_after_cleanup)
+        self.assertTrue(select_after_cleanup)
+
+    def test_start_worker_shows_runtime_error_before_thread_start(self) -> None:
+        # Arrange
+        window = MainWindow(batch_usecase=FakeBatchUseCase(runtime_error=RuntimeError("")))
+        window._set_selected_files([Path.cwd() / "images" / "a.png"])
+        window.progress_label.setText("進行状況: 1/3")
+
+        # Act
+        with patch("src.ui.windows.main_window.QMessageBox.critical") as critical:
+            window._on_start_clicked()
+
+        # Assert
+        self.assertEqual(window.progress_label.text(), "進行状況: 0/0")
+        self.assertEqual(window.current_file_label.text(), "現在処理中: 開始前エラー")
+        self.assertEqual(window.result_label.text(), "最終結果: 失敗 unknown error")
+        self.assertFalse(window._is_running)
+        self.assertIsNone(window._worker_thread)
+        self.assertTrue(window.start_button.isEnabled())
+        critical.assert_called_once_with(window, "処理失敗", "unknown error")
+        window.close()
 
 
 if __name__ == "__main__":

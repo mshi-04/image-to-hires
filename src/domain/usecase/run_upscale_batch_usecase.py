@@ -54,12 +54,16 @@ class RunUpscaleBatchUseCase:
         self._upscale_engine = upscale_engine
         self._image_storage = image_storage
 
+    def ensure_runtime_ready(self) -> None:
+        self._upscale_engine.ensure_runtime_ready()
+
     def execute(
         self,
         command: RunUpscaleBatchCommand,
         item_started_callback: Callable[[Path, int, int], None] | None = None,
         progress_callback: Callable[[UpscaleBatchItemResult, int, int], None] | None = None,
     ) -> RunUpscaleBatchResult:
+        self.ensure_runtime_ready()
         scale_factor = ScaleFactor(command.scale_factor)
         denoise_level = DenoiseLevel(command.denoise_level)
         input_image_paths = list(command.input_image_paths)

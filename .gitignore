@@ -55,6 +55,7 @@ temp/
 *.local
 
 # Model files and large assets
+bin/realcugan/
 models/
 artifacts/
 outputs/
