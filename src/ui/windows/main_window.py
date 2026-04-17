@@ -154,17 +154,6 @@ class MainWindow(QMainWindow):
         if self._worker_thread is not None:
             return
 
-        try:
-            self._batch_usecase.ensure_runtime_ready()
-        except RuntimeError as exc:
-            message = str(exc) or "unknown error"
-            summary = message.splitlines()[0]
-            self.progress_label.setText("進行状況: 0/0")
-            self.current_file_label.setText("現在処理中: 開始前エラー")
-            self.result_label.setText(f"最終結果: 失敗 {summary}")
-            QMessageBox.critical(self, "処理失敗", message)
-            return
-
         self._is_running = True
         self._update_start_button_state()
         self.select_button.setEnabled(False)

@@ -23,8 +23,10 @@ except ModuleNotFoundError:
 class FakeBatchUseCase:
     def __init__(self, runtime_error: Exception | None = None) -> None:
         self.runtime_error = runtime_error
+        self.ready_calls = 0
 
     def ensure_runtime_ready(self) -> None:
+        self.ready_calls += 1
         if self.runtime_error is not None:
             raise self.runtime_error
 
@@ -144,25 +146,43 @@ class TestMainWindow(unittest.TestCase):
         self.assertTrue(state_after_cleanup)
         self.assertTrue(select_after_cleanup)
 
-    def test_start_worker_shows_runtime_error_before_thread_start(self) -> None:
+    def test_start_worker_does_not_check_runtime_before_thread_start(self) -> None:
         # Arrange
-        window = MainWindow(batch_usecase=FakeBatchUseCase(runtime_error=RuntimeError("")))
+        batch_usecase = FakeBatchUseCase(runtime_error=RuntimeError("runtime missing"))
+        window = MainWindow(batch_usecase=batch_usecase)
         window._set_selected_files([Path.cwd() / "images" / "a.png"])
-        window.progress_label.setText("進行状況: 1/3")
 
         # Act
-        with patch("src.ui.windows.main_window.QMessageBox.critical") as critical:
+        with (
+            patch("src.ui.windows.main_window.QMessageBox.critical") as critical,
+            patch("src.ui.windows.main_window.QThread.start", autospec=True) as thread_start,
+        ):
             window._on_start_clicked()
 
         # Assert
-        self.assertEqual(window.progress_label.text(), "進行状況: 0/0")
-        self.assertEqual(window.current_file_label.text(), "現在処理中: 開始前エラー")
-        self.assertEqual(window.result_label.text(), "最終結果: 失敗 unknown error")
-        self.assertFalse(window._is_running)
-        self.assertIsNone(window._worker_thread)
-        self.assertTrue(window.start_button.isEnabled())
-        critical.assert_called_once_with(window, "処理失敗", "unknown error")
+        self.assertEqual(batch_usecase.ready_calls, 0)
+        self.assertTrue(window._is_running)
+        self.assertIsNotNone(window._worker_thread)
+        self.assertFalse(window.start_button.isEnabled())
+        critical.assert_not_called()
+        thread_start.assert_called_once()
+        window._on_worker_thread_finished()
         window.close()
+
+    def test_batch_failed_shows_critical_message_and_resets_state(self) -> None:
+        # Arrange
+        self.window._selected_files = [Path.cwd() / "images" / "a.png"]
+        self.window._is_running = True
+        self.window.progress_label.setText("進行状況: 1/1")
+
+        # Act
+        with patch("src.ui.windows.main_window.QMessageBox.critical") as critical:
+            self.window._on_batch_failed("Runtime missing error test")
+
+        # Assert
+        self.assertEqual(self.window.result_label.text(), "最終結果: 失敗 Runtime missing error test")
+        self.assertFalse(self.window._is_running)
+        critical.assert_called_once_with(self.window, "処理失敗", "Runtime missing error test")
 
 
 if __name__ == "__main__":

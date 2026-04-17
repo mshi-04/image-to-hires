@@ -43,6 +43,18 @@ class TestFileImageStorage(unittest.TestCase):
             temp_files = list(output_path.parent.glob(f".{output_path.name}.*.tmp"))
             self.assertEqual(temp_files, [])
 
+    def test_save_does_not_call_fsync(self) -> None:
+        # technical-design.md の記述「保存時の fsync は使わず〜」に基づく実装であることの確認
+        # もし将来的に fsync を復活させる方針に変更される場合は、このテストも修正・削除する
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            output_path = Path(tmp_dir) / "result.png"
+            storage = FileImageStorage()
+
+            with mock.patch("src.infrastructure.image_io.file_image_storage.os.fsync") as fsync:
+                storage.save(b"encoded-image", OutputImagePath(output_path))
+
+            fsync.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()
