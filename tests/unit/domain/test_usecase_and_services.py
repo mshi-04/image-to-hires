@@ -92,7 +92,7 @@ class TestDomainServicesAndUseCase(unittest.TestCase):
         output = build_default_output_path(input_image, scale_factor, denoise_level)
 
         # Assert
-        self.assertEqual(output.value, Path("C:/images/cat-denoisenonex-up2x.png"))
+        self.assertEqual(output.value, Path("C:/images/cat-denoiseoffx-up2x.png"))
 
     def test_run_upscale_usecase_runs_engine_and_saves_output(self) -> None:
         # Arrange

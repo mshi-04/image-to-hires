@@ -97,6 +97,7 @@ class RealCuganUpscaleEngine(UpscaleEnginePort):
             return buffer.getvalue()
 
     def _should_use_realcugan(self) -> bool:
+        # 将来 GPU 可用性チェック等の判定を加える拡張点として残す。
         return self._prefer_realcugan
 
     def _build_candidate_paths(self, configured_path: Path | None, relative_path: Path) -> list[Path]:
@@ -145,8 +146,8 @@ class RealCuganUpscaleEngine(UpscaleEnginePort):
                 return candidate
         return None
 
+    @staticmethod
     def _build_runtime_missing_message(
-        self,
         executable_candidates: list[Path],
         models_candidates: list[Path],
     ) -> str:
@@ -229,10 +230,8 @@ class RealCuganUpscaleEngine(UpscaleEnginePort):
 
     @staticmethod
     def _upscale_with_pillow(image: "Image.Image", scale_factor: int) -> "Image.Image":
-        try:
-            from PIL import Image
-        except ModuleNotFoundError as exc:
-            raise RuntimeError("Pillow is required to run RealCuganUpscaleEngine.") from exc
+        # Pillow の可用性は upscale() 冒頭で保証済みのためここでは再チェックしない。
+        from PIL import Image
 
         output_width = image.width * scale_factor
         output_height = image.height * scale_factor

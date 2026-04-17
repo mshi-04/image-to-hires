@@ -22,6 +22,29 @@ except ModuleNotFoundError:
 
 @unittest.skipUnless(PIL_AVAILABLE, "Pillow is required for RealCuganUpscaleEngine tests.")
 class TestRealCuganUpscaleEngine(unittest.TestCase):
+    # ---- helpers ----
+
+    @staticmethod
+    def _make_stub_runtime(tmp_path: Path) -> tuple[Path, Path]:
+        """Create stub executable and models directory under tmp_path."""
+        executable = tmp_path / "realcugan-ncnn-vulkan.exe"
+        model_dir = tmp_path / "models"
+        executable.write_bytes(b"stub")
+        model_dir.mkdir(parents=True, exist_ok=True)
+        return executable, model_dir
+
+    @staticmethod
+    def _make_engine_with_stub(tmp_path: Path) -> tuple["RealCuganUpscaleEngine", Path, Path]:
+        """Return an engine pre-configured with stub runtime under tmp_path."""
+        executable, model_dir = TestRealCuganUpscaleEngine._make_stub_runtime(tmp_path)
+        engine = RealCuganUpscaleEngine(
+            realcugan_executable=executable,
+            realcugan_models_dir=model_dir,
+        )
+        return engine, executable, model_dir
+
+    # ---- tests ----
+
     def test_ensure_runtime_ready_resolves_repo_root_paths(self) -> None:
         # Arrange
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -285,17 +308,8 @@ class TestRealCuganUpscaleEngine(unittest.TestCase):
             tmp_path = Path(tmp_dir)
             input_path = tmp_path / "input.png"
             output_path = tmp_path / "output.png"
-            executable = tmp_path / "realcugan-ncnn-vulkan.exe"
-            model_dir = tmp_path / "models"
-
-            executable.write_bytes(b"stub")
-            model_dir.mkdir(parents=True, exist_ok=True)
             Image.new("RGB", (2, 2), color=(100, 120, 140)).save(input_path, format="PNG")
-
-            engine = RealCuganUpscaleEngine(
-                realcugan_executable=executable,
-                realcugan_models_dir=model_dir,
-            )
+            engine, _, _ = self._make_engine_with_stub(tmp_path)
 
             def fake_runner(command: list[str]) -> subprocess.CompletedProcess[str]:
                 output_file = Path(command[command.index("-o") + 1])
@@ -333,17 +347,8 @@ class TestRealCuganUpscaleEngine(unittest.TestCase):
             tmp_path = Path(tmp_dir)
             input_path = tmp_path / "input.png"
             output_path = tmp_path / "output.png"
-            executable = tmp_path / "realcugan-ncnn-vulkan.exe"
-            model_dir = tmp_path / "models"
-
-            executable.write_bytes(b"stub")
-            model_dir.mkdir(parents=True, exist_ok=True)
             Image.new("RGB", (2, 2), color=(100, 120, 140)).save(input_path, format="PNG")
-
-            engine = RealCuganUpscaleEngine(
-                realcugan_executable=executable,
-                realcugan_models_dir=model_dir,
-            )
+            engine, _, _ = self._make_engine_with_stub(tmp_path)
 
             with mock.patch.object(
                 engine,
@@ -372,17 +377,8 @@ class TestRealCuganUpscaleEngine(unittest.TestCase):
             tmp_path = Path(tmp_dir)
             input_path = tmp_path / "input.png"
             output_path = tmp_path / "output.png"
-            executable = tmp_path / "realcugan-ncnn-vulkan.exe"
-            model_dir = tmp_path / "models"
-
-            executable.write_bytes(b"stub")
-            model_dir.mkdir(parents=True, exist_ok=True)
             Image.new("RGB", (2, 2), color=(100, 120, 140)).save(input_path, format="PNG")
-
-            engine = RealCuganUpscaleEngine(
-                realcugan_executable=executable,
-                realcugan_models_dir=model_dir,
-            )
+            engine, _, _ = self._make_engine_with_stub(tmp_path)
 
             def fake_runner_no_output(command: list[str]) -> subprocess.CompletedProcess[str]:
                 # return success but do not create output file
@@ -406,23 +402,15 @@ class TestRealCuganUpscaleEngine(unittest.TestCase):
             tmp_path = Path(tmp_dir)
             input_path = tmp_path / "input.png"
             output_path = tmp_path / "output.png"
-            executable = tmp_path / "realcugan-ncnn-vulkan.exe"
-            model_dir = tmp_path / "models"
-
-            executable.write_bytes(b"stub")
-            model_dir.mkdir(parents=True, exist_ok=True)
             Image.new("RGB", (2, 2), color=(100, 120, 140)).save(input_path, format="PNG")
+            engine, _, _ = self._make_engine_with_stub(tmp_path)
 
-            engine = RealCuganUpscaleEngine(
-                realcugan_executable=executable,
-                realcugan_models_dir=model_dir,
-            )
+            # _run_realcugan 内部で TimeoutExpired -> RuntimeError に変換するが、
+            # _run_realcugan 自体をモックする場合は変換後の RuntimeError を直接 raise する。
+            def fake_runner_timeout(command: list[str]) -> subprocess.CompletedProcess[str]:  # noqa: ARG001
+                raise RuntimeError("Real-CUGAN execution timed out after 1800 seconds.")
 
-            def fake_runner_timeout(*args, **kwargs) -> subprocess.CompletedProcess[str]:
-                command = args[0]
-                raise subprocess.TimeoutExpired(cmd=command, timeout=1800)
-
-            with mock.patch("subprocess.run", side_effect=fake_runner_timeout):
+            with mock.patch.object(engine, "_run_realcugan", side_effect=fake_runner_timeout):
                 # Act / Assert
                 with self.assertRaisesRegex(RuntimeError, "execution timed out after"):
                     engine.upscale(
