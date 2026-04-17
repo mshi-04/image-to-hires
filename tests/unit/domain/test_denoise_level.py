@@ -6,7 +6,7 @@ from src.domain.value_objects.denoise_level import DenoiseLevel
 
 class TestDenoiseLevel(unittest.TestCase):
     def test_denoise_level_accepts_supported_values(self) -> None:
-        for value in [0, 1, 2, 3]:
+        for value in [-1, 0, 1, 2, 3]:
             with self.subTest(value=value):
                 # Arrange / Act
                 denoise_level = DenoiseLevel(value)
@@ -19,10 +19,10 @@ class TestDenoiseLevel(unittest.TestCase):
         with self.assertRaises(UnsupportedDenoiseLevelError):
             DenoiseLevel(4)
 
-    def test_denoise_level_rejects_negative_value(self) -> None:
+    def test_denoise_level_rejects_unsupported_negative_value(self) -> None:
         # Arrange / Act / Assert
         with self.assertRaises(UnsupportedDenoiseLevelError):
-            DenoiseLevel(-1)
+            DenoiseLevel(-2)
 
     def test_denoise_level_rejects_non_integer_number(self) -> None:
         # Arrange / Act / Assert

@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from src.domain.exceptions import UnsupportedDenoiseLevelError
 
 
-SUPPORTED_DENOISE_LEVELS = frozenset({0, 1, 2, 3})
+SUPPORTED_DENOISE_LEVELS = frozenset({-1, 0, 1, 2, 3})
 
 
 @dataclass(frozen=True)
