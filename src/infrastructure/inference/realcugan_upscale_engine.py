@@ -15,6 +15,9 @@ if TYPE_CHECKING:
 class RealCuganUpscaleEngine(UpscaleEnginePort):
     """Upscaler with local Real-CUGAN path and Pillow fallback."""
 
+    _EXECUTABLE_RELATIVE_PATH = Path("bin") / "realcugan" / "realcugan-ncnn-vulkan.exe"
+    _MODELS_RELATIVE_PATH = Path("models") / "realcugan" / "models-se"
+
     def __init__(
         self,
         realcugan_executable: Path | str | None = None,
@@ -22,13 +25,43 @@ class RealCuganUpscaleEngine(UpscaleEnginePort):
         prefer_realcugan: bool = True,
     ) -> None:
         self._prefer_realcugan = prefer_realcugan
-
-        # 実行ファイルの位置からデフォルトパスを解決する
-        base_dir = Path(sys.executable).parent if getattr(sys, "frozen", False) else Path.cwd()
-        self._realcugan_executable = Path(realcugan_executable or base_dir / "bin" / "realcugan" / "realcugan-ncnn-vulkan.exe")
-        self._realcugan_models_dir = Path(
-            realcugan_models_dir or base_dir / "models" / "realcugan" / "models-se"
+        self._configured_realcugan_executable = (
+            Path(realcugan_executable) if realcugan_executable is not None else None
         )
+        self._configured_realcugan_models_dir = (
+            Path(realcugan_models_dir) if realcugan_models_dir is not None else None
+        )
+        self._realcugan_executable: Path | None = self._configured_realcugan_executable
+        self._realcugan_models_dir: Path | None = self._configured_realcugan_models_dir
+        self._runtime_ready = False
+
+    def ensure_runtime_ready(self) -> None:
+        if not self._prefer_realcugan or self._runtime_ready:
+            return
+
+        executable_candidates = self._build_candidate_paths(
+            configured_path=self._configured_realcugan_executable,
+            relative_path=self._EXECUTABLE_RELATIVE_PATH,
+        )
+        models_candidates = self._build_candidate_paths(
+            configured_path=self._configured_realcugan_models_dir,
+            relative_path=self._MODELS_RELATIVE_PATH,
+        )
+
+        resolved_executable = self._find_first_existing_file(executable_candidates)
+        resolved_models_dir = self._find_first_existing_directory(models_candidates)
+
+        if resolved_executable is None or resolved_models_dir is None:
+            raise RuntimeError(
+                self._build_runtime_missing_message(
+                    executable_candidates=executable_candidates,
+                    models_candidates=models_candidates,
+                )
+            )
+
+        self._realcugan_executable = resolved_executable
+        self._realcugan_models_dir = resolved_models_dir
+        self._runtime_ready = True
 
     def upscale(self, job: UpscaleJob) -> bytes:
         image_path = Path(job.input_image.value)
@@ -43,7 +76,7 @@ class RealCuganUpscaleEngine(UpscaleEnginePort):
         with Image.open(image_path) as source_image:
             normalized_image = ImageOps.exif_transpose(source_image)
             if self._should_use_realcugan():
-                self._assert_realcugan_runtime_is_ready()
+                self.ensure_runtime_ready()
                 upscaled_image = self._upscale_with_realcugan(normalized_image, job)
             else:
                 upscaled_image = self._upscale_with_pillow(normalized_image, job.scale_factor.value)
@@ -66,18 +99,92 @@ class RealCuganUpscaleEngine(UpscaleEnginePort):
     def _should_use_realcugan(self) -> bool:
         return self._prefer_realcugan
 
-    def _assert_realcugan_runtime_is_ready(self) -> None:
-        missing_reasons: list[str] = []
-        if not self._realcugan_executable.is_file():
-            missing_reasons.append(f"executable not found: {self._realcugan_executable}")
-        if not self._realcugan_models_dir.is_dir():
-            missing_reasons.append(f"models directory not found: {self._realcugan_models_dir}")
-        if missing_reasons:
-            details = "; ".join(missing_reasons)
-            raise RuntimeError(f"Real-CUGAN runtime is not ready: {details}")
+    def _build_candidate_paths(self, configured_path: Path | None, relative_path: Path) -> list[Path]:
+        candidates: list[Path] = []
+        if configured_path is not None:
+            candidates.append(configured_path.resolve(strict=False))
+
+        for root in self._get_runtime_search_roots():
+            candidates.append((root / relative_path).resolve(strict=False))
+
+        return self._deduplicate_paths(candidates)
+
+    def _get_runtime_search_roots(self) -> list[Path]:
+        return self._deduplicate_paths(
+            [
+                self._get_executable_parent(),
+                self._get_pyinstaller_contents_directory(),
+                self._get_repo_root(),
+                self._get_current_working_directory(),
+            ]
+        )
+
+    @staticmethod
+    def _deduplicate_paths(paths: list[Path]) -> list[Path]:
+        deduplicated: list[Path] = []
+        seen: set[str] = set()
+        for path in paths:
+            normalized = str(path).lower()
+            if normalized in seen:
+                continue
+            seen.add(normalized)
+            deduplicated.append(path)
+        return deduplicated
+
+    @staticmethod
+    def _find_first_existing_file(candidates: list[Path]) -> Path | None:
+        for candidate in candidates:
+            if candidate.is_file():
+                return candidate
+        return None
+
+    @staticmethod
+    def _find_first_existing_directory(candidates: list[Path]) -> Path | None:
+        for candidate in candidates:
+            if candidate.is_dir():
+                return candidate
+        return None
+
+    def _build_runtime_missing_message(
+        self,
+        executable_candidates: list[Path],
+        models_candidates: list[Path],
+    ) -> str:
+        executable_paths = ", ".join(str(path) for path in executable_candidates)
+        model_paths = ", ".join(str(path) for path in models_candidates)
+        return (
+            "Real-CUGAN runtime is not ready. "
+            "Place the executable under bin\\realcugan\\realcugan-ncnn-vulkan.exe "
+            "and the models under models\\realcugan\\models-se\\. "
+            f"Checked executable paths: {executable_paths}. "
+            f"Checked models paths: {model_paths}."
+        )
+
+    @staticmethod
+    def _get_executable_parent() -> Path:
+        return Path(sys.executable).resolve(strict=False).parent
+
+    @staticmethod
+    def _get_pyinstaller_contents_directory() -> Path:
+        meipass = getattr(sys, "_MEIPASS", None)
+        if meipass:
+            return Path(meipass).resolve(strict=False)
+        return Path(sys.executable).resolve(strict=False).parent / "_internal"
+
+    @staticmethod
+    def _get_repo_root() -> Path:
+        return Path(__file__).resolve().parents[3]
+
+    @staticmethod
+    def _get_current_working_directory() -> Path:
+        return Path.cwd().resolve(strict=False)
 
     def _upscale_with_realcugan(self, image: "Image.Image", job: UpscaleJob) -> "Image.Image":
         from PIL import Image
+
+        if self._realcugan_executable is None or self._realcugan_models_dir is None:
+            raise RuntimeError("Real-CUGAN runtime paths are unresolved.")
+
         with tempfile.TemporaryDirectory() as tmp_dir:
             tmp_dir_path = Path(tmp_dir)
             input_png = tmp_dir_path / "input.png"

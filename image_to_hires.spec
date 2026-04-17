@@ -3,12 +3,27 @@
 from pathlib import Path
 
 project_root = Path(SPECPATH).resolve()
+realcugan_bin_dir = project_root / "bin" / "realcugan"
+realcugan_models_dir = project_root / "models" / "realcugan" / "models-se"
+
+
+def _collect_tree(source_dir: Path, target_prefix: str) -> list[tuple[str, str]]:
+    return [
+        (str(path), f"{target_prefix}/{path.relative_to(source_dir).parent}".rstrip("/."))
+        for path in sorted(source_dir.rglob("*"))
+        if path.is_file()
+    ]
+
+
+datas = []
+datas.extend(_collect_tree(realcugan_bin_dir, "bin/realcugan"))
+datas.extend(_collect_tree(realcugan_models_dir, "models/realcugan/models-se"))
 
 a = Analysis(
     [str(project_root / "src" / "main.py")],
     pathex=[str(project_root)],
     binaries=[],
-    datas=[],
+    datas=datas,
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},

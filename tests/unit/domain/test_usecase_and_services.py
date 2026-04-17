@@ -20,9 +20,20 @@ from src.domain.value_objects.scale_factor import ScaleFactor
 
 
 class FakeUpscaleEngine(UpscaleEnginePort):
-    def __init__(self, fail_input_paths: set[Path] | None = None) -> None:
+    def __init__(
+        self,
+        fail_input_paths: set[Path] | None = None,
+        runtime_error: Exception | None = None,
+    ) -> None:
         self.calls: list[tuple[Path, int, int, Path]] = []
         self.fail_input_paths = fail_input_paths or set()
+        self.runtime_error = runtime_error
+        self.ready_calls = 0
+
+    def ensure_runtime_ready(self) -> None:
+        self.ready_calls += 1
+        if self.runtime_error is not None:
+            raise self.runtime_error
 
     def upscale(self, job: UpscaleJob) -> bytes:
         self.calls.append(
@@ -81,7 +92,7 @@ class TestDomainServicesAndUseCase(unittest.TestCase):
         output = build_default_output_path(input_image, scale_factor, denoise_level)
 
         # Assert
-        self.assertEqual(output.value, Path("C:/images/cat-denoise(none)x-up(2)x.png"))
+        self.assertEqual(output.value, Path("C:/images/cat-denoisenonex-up2x.png"))
 
     def test_run_upscale_usecase_runs_engine_and_saves_output(self) -> None:
         # Arrange
@@ -104,6 +115,7 @@ class TestDomainServicesAndUseCase(unittest.TestCase):
             fake_engine.calls,
             [(Path("C:/images/input.png"), 2, 1, Path("C:/images/output.png"))],
         )
+        self.assertEqual(fake_engine.ready_calls, 0)
         self.assertEqual(fake_storage.calls, [(b"upscaled-image", Path("C:/images/output.png"))])
         self.assertEqual(result.scale_factor.value, 2)
         self.assertEqual(result.denoise_level.value, 1)
@@ -152,6 +164,7 @@ class TestDomainServicesAndUseCase(unittest.TestCase):
         self.assertEqual(result.processed_count, 3)
         self.assertEqual(result.success_count, 2)
         self.assertEqual(result.failure_count, 1)
+        self.assertEqual(fake_engine.ready_calls, 1)
 
         self.assertEqual(
             [item.output_image_path for item in result.items],
@@ -212,6 +225,26 @@ class TestDomainServicesAndUseCase(unittest.TestCase):
                 (Path("C:/images/ok2.webp"), 3, 3),
             ],
         )
+
+    def test_run_upscale_batch_usecase_stops_before_queue_when_runtime_is_not_ready(self) -> None:
+        # Arrange
+        fake_engine = FakeUpscaleEngine(runtime_error=RuntimeError("runtime missing"))
+        fake_storage = FakeImageStorage()
+        usecase = RunUpscaleBatchUseCase(upscale_engine=fake_engine, image_storage=fake_storage)
+
+        # Act / Assert
+        with self.assertRaisesRegex(RuntimeError, "runtime missing"):
+            usecase.execute(
+                RunUpscaleBatchCommand(
+                    input_image_paths=[Path("C:/images/one.png"), Path("C:/images/two.png")],
+                    scale_factor=2,
+                    denoise_level=0,
+                )
+            )
+
+        self.assertEqual(fake_engine.ready_calls, 1)
+        self.assertEqual(fake_engine.calls, [])
+        self.assertEqual(fake_storage.calls, [])
 
     def test_run_upscale_batch_usecase_validates_output_path_count(self) -> None:
         # Arrange

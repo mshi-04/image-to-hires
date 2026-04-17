@@ -147,6 +147,17 @@ class MainWindow(QMainWindow):
 
         denoise_level = int(self.denoise_combo.currentData())
         scale_factor = int(self.scale_combo.currentData())
+
+        try:
+            self._batch_usecase.ensure_runtime_ready()
+        except Exception as exc:
+            message = str(exc)
+            summary = message.splitlines()[0]
+            self.current_file_label.setText("現在処理中: 開始前エラー")
+            self.result_label.setText(f"最終結果: 失敗 {summary}")
+            QMessageBox.critical(self, "処理失敗", message)
+            return
+
         self._start_worker(denoise_level=denoise_level, scale_factor=scale_factor)
 
     def _start_worker(self, denoise_level: int, scale_factor: int) -> None:

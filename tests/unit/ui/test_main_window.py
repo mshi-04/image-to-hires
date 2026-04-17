@@ -21,6 +21,15 @@ except ModuleNotFoundError:
 
 
 class FakeBatchUseCase:
+    def __init__(self, runtime_error: Exception | None = None) -> None:
+        self.runtime_error = runtime_error
+        self.ready_calls = 0
+
+    def ensure_runtime_ready(self) -> None:
+        self.ready_calls += 1
+        if self.runtime_error is not None:
+            raise self.runtime_error
+
     def execute(self, command, item_started_callback=None, progress_callback=None):  # noqa: ANN001
         paths = [Path(p) for p in command.input_image_paths]
         scale = ScaleFactor(command.scale_factor)
@@ -114,6 +123,29 @@ class TestMainWindow(unittest.TestCase):
         # Assert
         self.assertFalse(running_state)
         self.assertTrue(completed_state)
+
+    def test_start_click_shows_error_and_skips_worker_when_runtime_is_not_ready(self) -> None:
+        # Arrange
+        runtime_error = RuntimeError("Real-CUGAN runtime is not ready")
+        self.window.close()
+        self.window = MainWindow(batch_usecase=FakeBatchUseCase(runtime_error=runtime_error))
+        self.window._set_selected_files([Path.cwd() / "images" / "a.png"])
+
+        # Act
+        with (
+            patch.object(self.window, "_start_worker") as start_worker,
+            patch("src.ui.windows.main_window.QMessageBox.critical") as critical,
+        ):
+            self.window._on_start_clicked()
+
+        # Assert
+        start_worker.assert_not_called()
+        critical.assert_called_once()
+        self.assertEqual(self.window.current_file_label.text(), "現在処理中: 開始前エラー")
+        self.assertEqual(
+            self.window.result_label.text(),
+            "最終結果: 失敗 Real-CUGAN runtime is not ready",
+        )
 
 
 if __name__ == "__main__":
