@@ -31,6 +31,7 @@ class FakeBatchUseCase:
             raise self.runtime_error
 
     def execute(self, command, item_started_callback=None, progress_callback=None):  # noqa: ANN001
+        self.ensure_runtime_ready()
         paths = [Path(p) for p in command.input_image_paths]
         scale = ScaleFactor(command.scale_factor)
         denoise = DenoiseLevel(command.denoise_level)

@@ -81,8 +81,31 @@ class TestRealCuganUpscaleEngine(unittest.TestCase):
                 work_directory = engine._ensure_work_directory()
 
             # Assert
-            self.assertEqual(work_directory, (base_path / "tmp" / "realcugan-work").resolve(strict=False))
+            expected_root = (base_path / "tmp" / "realcugan-work").resolve(strict=False)
+            self.assertEqual(work_directory.parent, expected_root)
             self.assertTrue(work_directory.is_dir())
+            self.assertTrue(work_directory.name)
+
+    def test_ensure_work_directory_isolated_per_engine_instance(self) -> None:
+        # Arrange
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            base_path = Path(tmp_dir)
+            first = RealCuganUpscaleEngine(prefer_realcugan=False)
+            second = RealCuganUpscaleEngine(prefer_realcugan=False)
+
+            with (
+                mock.patch.object(first, "_get_current_working_directory", return_value=base_path),
+                mock.patch.object(second, "_get_current_working_directory", return_value=base_path),
+            ):
+                # Act
+                first_dir = first._ensure_work_directory()
+                second_dir = second._ensure_work_directory()
+
+            # Assert
+            expected_root = (base_path / "tmp" / "realcugan-work").resolve(strict=False)
+            self.assertNotEqual(first_dir, second_dir)
+            self.assertEqual(first_dir.parent, expected_root)
+            self.assertEqual(second_dir.parent, expected_root)
 
     def test_ensure_runtime_ready_prefers_executable_parent_before_repo_root(self) -> None:
         # Arrange

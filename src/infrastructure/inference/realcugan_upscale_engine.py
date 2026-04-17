@@ -1,8 +1,10 @@
+import os
 import subprocess
 import sys
 from io import BytesIO
 from pathlib import Path
 from typing import TYPE_CHECKING
+from uuid import uuid4
 
 from src.domain.entities.upscale_job import UpscaleJob
 from src.domain.ports.upscale_engine_port import UpscaleEnginePort
@@ -42,6 +44,7 @@ class RealCuganUpscaleEngine(UpscaleEnginePort):
         self._realcugan_models_dir: Path | None = self._configured_realcugan_models_dir
         self._runtime_ready = False
         self._work_directory: Path | None = None
+        self._work_directory_id = f"{os.getpid()}-{uuid4().hex}"
 
     def ensure_runtime_ready(self) -> None:
         if not self._prefer_realcugan or self._runtime_ready:
@@ -234,7 +237,9 @@ class RealCuganUpscaleEngine(UpscaleEnginePort):
             return self._work_directory
 
         self._work_directory = (
-            self._get_current_working_directory() / self._WORK_DIRECTORY_RELATIVE_PATH
+            self._get_current_working_directory()
+            / self._WORK_DIRECTORY_RELATIVE_PATH
+            / self._work_directory_id
         ).resolve(strict=False)
         self._work_directory.mkdir(parents=True, exist_ok=True)
         return self._work_directory
@@ -260,6 +265,15 @@ class RealCuganUpscaleEngine(UpscaleEnginePort):
             self._work_directory / self._TEMP_INPUT_NAME,
             self._work_directory / self._TEMP_OUTPUT_NAME,
         )
+        self._remove_empty_directory_if_exists(self._work_directory)
+
+    @staticmethod
+    def _remove_empty_directory_if_exists(directory_path: Path) -> None:
+        try:
+            directory_path.rmdir()
+        except OSError:
+            # ファイル残存や他要因で削除不可でも、処理本体には影響しないため無視する。
+            pass
 
     @staticmethod
     def _prepare_for_realcugan_png(image: "Image.Image") -> "Image.Image":
