@@ -21,15 +21,17 @@
 
 ## 4. モデル取得方針
 
-現時点では採用モデルを最終確定していないため、固定のダウンロード URL や取得コマンドはまだ定義しない。
+現在は Real-CUGAN (ncnn-vulkan) を採用している。以下の手順でバイナリとモデルを取得して配置する。
 
-- MVP 候補は `docs/technical-design.md` にあるとおり Real-ESRGAN 系を中心に検討する
-- 採用モデルを確定したら、入手元 URL、ライセンス、配置先、必要なら検証手順をこの文書へ追記する
-- 認証が必要な配布元を使う場合は、必要な環境変数やログイン手順もこの文書へ追記する
+1. [Real-CUGAN の GitHub Releases](https://github.com/nihui/realcugan-ncnn-vulkan/releases) から Windows 版バイナリ（例: `realcugan-ncnn-vulkan-...-windows.zip`）をダウンロードする。
+2. ZIP を解凍し、以下のディレクトリ構成になるように配置する。
 
 ## 5. 配置ルール
 
-- 学習済み重みは `models/` 配下へ置く
+- 推論用バイナリは `bin/` 配下へ置く。
+  - 例: `bin/realcugan/realcugan-ncnn-vulkan.exe`
+- 学習済み重みは `models/` 配下へ置く。
+  - 例: `models/realcugan/models-se/` 等 (解凍したモデル構成をそのまま配置)
 - 検証用の生成物は `artifacts/` 配下へ置く
 - 手動保存した出力例は `outputs/` 配下へ置く
 - 生成物の命名規則やサブディレクトリ構成を決めたら、この文書へ追記する

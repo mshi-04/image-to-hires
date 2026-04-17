@@ -57,6 +57,7 @@ class RunUpscaleBatchUseCase:
     def execute(
         self,
         command: RunUpscaleBatchCommand,
+        item_started_callback: Callable[[Path, int, int], None] | None = None,
         progress_callback: Callable[[UpscaleBatchItemResult, int, int], None] | None = None,
     ) -> RunUpscaleBatchResult:
         scale_factor = ScaleFactor(command.scale_factor)
@@ -71,9 +72,12 @@ class RunUpscaleBatchUseCase:
         failure_count = 0
 
         for index, input_image_path in enumerate(input_image_paths):
+            current_input_path = Path(input_image_path)
+            if item_started_callback is not None:
+                item_started_callback(current_input_path, index + 1, total_count)
             output_image_path: Path | None = None
             try:
-                input_image = InputImagePath(Path(input_image_path))
+                input_image = InputImagePath(current_input_path)
                 output_candidate = output_image_paths[index] if output_image_paths is not None else None
                 if output_candidate is not None:
                     output_image = OutputImagePath(Path(output_candidate))
@@ -99,7 +103,7 @@ class RunUpscaleBatchUseCase:
             # Intentionally catch per-item errors so batch processing can continue.
             except Exception as exc:  # noqa: BLE001
                 item_result = UpscaleBatchItemResult(
-                    input_image_path=Path(input_image_path),
+                    input_image_path=current_input_path,
                     output_image_path=output_image_path,
                     scale_factor=scale_factor,
                     denoise_level=denoise_level,

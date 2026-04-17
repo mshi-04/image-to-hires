@@ -71,6 +71,18 @@ class TestDomainServicesAndUseCase(unittest.TestCase):
         # Assert
         self.assertEqual(output.value, Path("C:/images/cat-denoise(1)x-up(3)x.jpg"))
 
+    def test_build_default_output_path_uses_off_label_when_denoise_is_minus_one(self) -> None:
+        # Arrange
+        input_image = InputImagePath(Path("C:/images/cat.png"))
+        scale_factor = ScaleFactor(2)
+        denoise_level = DenoiseLevel(-1)
+
+        # Act
+        output = build_default_output_path(input_image, scale_factor, denoise_level)
+
+        # Assert
+        self.assertEqual(output.value, Path("C:/images/cat-denoise(none)x-up(2)x.png"))
+
     def test_run_upscale_usecase_runs_engine_and_saves_output(self) -> None:
         # Arrange
         fake_engine = FakeUpscaleEngine()
@@ -109,6 +121,11 @@ class TestDomainServicesAndUseCase(unittest.TestCase):
         usecase = RunUpscaleBatchUseCase(upscale_engine=fake_engine, image_storage=fake_storage)
         progress_events: list[tuple[Path, bool, int, int]] = []
 
+        item_started_events: list[tuple[Path, int, int]] = []
+
+        def item_started_callback(input_path: Path, processed_count: int, total_count: int) -> None:
+            item_started_events.append((input_path, processed_count, total_count))
+
         def progress_callback(item_result, processed_count: int, total_count: int) -> None:
             progress_events.append(
                 (
@@ -126,6 +143,7 @@ class TestDomainServicesAndUseCase(unittest.TestCase):
                 scale_factor=2,
                 denoise_level=3,
             ),
+            item_started_callback=item_started_callback,
             progress_callback=progress_callback,
         )
 
@@ -184,6 +202,14 @@ class TestDomainServicesAndUseCase(unittest.TestCase):
                 (Path("C:/images/ok.png"), True, 1, 3),
                 (Path("C:/images/fail.png"), False, 2, 3),
                 (Path("C:/images/ok2.webp"), True, 3, 3),
+            ],
+        )
+        self.assertEqual(
+            item_started_events,
+            [
+                (Path("C:/images/ok.png"), 1, 3),
+                (Path("C:/images/fail.png"), 2, 3),
+                (Path("C:/images/ok2.webp"), 3, 3),
             ],
         )
 
