@@ -57,7 +57,7 @@ class TestDomainServicesAndUseCase(unittest.TestCase):
         output = build_default_output_path(input_image, scale_factor, denoise_level)
 
         # Assert
-        self.assertEqual(output.value, Path("C:/images/cat-denoise(2)x-up(4)x.webp"))
+        self.assertEqual(output.value, Path("C:/images/cat-denoise2x-up4x.webp"))
 
     def test_build_default_output_path_normalizes_uppercase_extension_to_lowercase(self) -> None:
         # Arrange
@@ -69,7 +69,7 @@ class TestDomainServicesAndUseCase(unittest.TestCase):
         output = build_default_output_path(input_image, scale_factor, denoise_level)
 
         # Assert
-        self.assertEqual(output.value, Path("C:/images/cat-denoise(1)x-up(3)x.jpg"))
+        self.assertEqual(output.value, Path("C:/images/cat-denoise1x-up3x.jpg"))
 
     def test_run_upscale_usecase_runs_engine_and_saves_output(self) -> None:
         # Arrange
@@ -138,9 +138,9 @@ class TestDomainServicesAndUseCase(unittest.TestCase):
         self.assertEqual(
             [item.output_image_path for item in result.items],
             [
-                Path("C:/images/ok-denoise(3)x-up(2)x.png"),
-                Path("C:/images/fail-denoise(3)x-up(2)x.png"),
-                Path("C:/images/ok2-denoise(3)x-up(2)x.webp"),
+                Path("C:/images/ok-denoise3x-up2x.png"),
+                Path("C:/images/fail-denoise3x-up2x.png"),
+                Path("C:/images/ok2-denoise3x-up2x.webp"),
             ],
         )
         self.assertTrue(result.items[0].is_success)
@@ -155,27 +155,27 @@ class TestDomainServicesAndUseCase(unittest.TestCase):
                     Path("C:/images/ok.png"),
                     2,
                     3,
-                    Path("C:/images/ok-denoise(3)x-up(2)x.png"),
+                    Path("C:/images/ok-denoise3x-up2x.png"),
                 ),
                 (
                     Path("C:/images/fail.png"),
                     2,
                     3,
-                    Path("C:/images/fail-denoise(3)x-up(2)x.png"),
+                    Path("C:/images/fail-denoise3x-up2x.png"),
                 ),
                 (
                     Path("C:/images/ok2.webp"),
                     2,
                     3,
-                    Path("C:/images/ok2-denoise(3)x-up(2)x.webp"),
+                    Path("C:/images/ok2-denoise3x-up2x.webp"),
                 ),
             ],
         )
         self.assertEqual(
             fake_storage.calls,
             [
-                (b"upscaled-image", Path("C:/images/ok-denoise(3)x-up(2)x.png")),
-                (b"upscaled-image", Path("C:/images/ok2-denoise(3)x-up(2)x.webp")),
+                (b"upscaled-image", Path("C:/images/ok-denoise3x-up2x.png")),
+                (b"upscaled-image", Path("C:/images/ok2-denoise3x-up2x.webp")),
             ],
         )
         self.assertEqual(

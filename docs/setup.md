@@ -10,6 +10,7 @@
 - Python 実行は `python` コマンドを前提にする
 - NVIDIA GPU と CUDA が使える環境を前提にする
 - 学習済みモデルはリポジトリへコミットしない
+- ローカル起動は `.exe` を主導線にする
 
 ## 3. ディレクトリ用途
 
@@ -37,3 +38,32 @@
 ## 6. 文書更新ルール
 
 モデルの取得元、配置ルール、必要な認証情報、成果物の扱いを変えた場合は、この文書と `AGENTS.md` を一緒に更新する。
+
+## 7. Windows exe ビルド手順
+
+### 7.1 方針
+
+- ローカル PC に Python が入っていない利用者でも起動できるように、`PyInstaller` の `onedir` でランタイムを同梱する
+- 現時点ではインストーラー作成や配布自動化は対象外
+
+### 7.2 ビルド
+
+リポジトリ直下で次を実行する。
+
+```powershell
+python -m pip install -r requirements.txt
+powershell -ExecutionPolicy Bypass -File .\scripts\build_exe.ps1
+```
+
+### 7.3 起動確認
+
+ビルド後は次の exe を起動する。
+
+```powershell
+.\dist\image-to-hires\image-to-hires.exe
+```
+
+### 7.4 成果物
+
+- `build/`: PyInstaller 作業ディレクトリ（中間生成物）
+- `dist/image-to-hires/`: 配布前確認用の exe 一式
