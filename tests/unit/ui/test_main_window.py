@@ -1,11 +1,16 @@
 import unittest
 from pathlib import Path
-from types import SimpleNamespace
 from unittest.mock import patch
 
 try:
     from PySide6.QtWidgets import QApplication
 
+    from src.domain.usecase.run_upscale_batch_usecase import (
+        RunUpscaleBatchResult,
+        UpscaleBatchItemResult,
+    )
+    from src.domain.value_objects.denoise_level import DenoiseLevel
+    from src.domain.value_objects.scale_factor import ScaleFactor
     from src.ui.windows.main_window import MainWindow
 
     PYSIDE_AVAILABLE = True
@@ -17,29 +22,28 @@ except ModuleNotFoundError:
 
 class FakeBatchUseCase:
     def execute(self, command, item_started_callback=None, progress_callback=None):  # noqa: ANN001
-        if item_started_callback and command.input_image_paths:
-            item_started_callback(
-                Path(command.input_image_paths[0]),
-                1,
-                len(command.input_image_paths),
+        paths = [Path(p) for p in command.input_image_paths]
+        scale = ScaleFactor(command.scale_factor) if PYSIDE_AVAILABLE else None
+        denoise = DenoiseLevel(command.denoise_level) if PYSIDE_AVAILABLE else None
+        items = []
+        if paths:
+            if item_started_callback:
+                item_started_callback(paths[0], 1, len(paths))
+            item = UpscaleBatchItemResult(
+                input_image_path=paths[0],
+                output_image_path=paths[0],
+                scale_factor=scale,
+                denoise_level=denoise,
             )
-        if progress_callback and command.input_image_paths:
-            progress_callback(
-                SimpleNamespace(
-                    input_image_path=Path(command.input_image_paths[0]),
-                    output_image_path=Path(command.input_image_paths[0]),
-                    is_success=True,
-                    error=None,
-                ),
-                1,
-                len(command.input_image_paths),
-            )
-        return SimpleNamespace(
-            items=[],
-            processed_count=len(command.input_image_paths),
-            success_count=len(command.input_image_paths),
+            items.append(item)
+            if progress_callback:
+                progress_callback(item, 1, len(paths))
+        return RunUpscaleBatchResult(
+            items=tuple(items),
+            processed_count=len(paths),
+            success_count=len(paths),
             failure_count=0,
-            total_count=len(command.input_image_paths),
+            total_count=len(paths),
         )
 
 
@@ -98,6 +102,9 @@ class TestMainWindow(unittest.TestCase):
 
         # Act
         self.window._on_batch_started(1)
+        # TODO: テストが内部状態 (_is_running) を直接操作している。
+        #   _on_batch_started でフラグを立てる設計への変更、またはパブリック API を
+        #   介したテスト方法を検討する。
         self.window._is_running = True
         self.window._update_start_button_state()
         running_state = self.window.start_button.isEnabled()

@@ -1,7 +1,9 @@
 from pathlib import Path
 
 from PySide6.QtCore import QThread, Qt, Slot
+from PySide6.QtGui import QCloseEvent
 from PySide6.QtWidgets import (
+    QComboBox,
     QFileDialog,
     QFormLayout,
     QHBoxLayout,
@@ -114,9 +116,7 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(root)
 
     @staticmethod
-    def _build_combo_box(values: list[tuple[str, int]]):
-        from PySide6.QtWidgets import QComboBox
-
+    def _build_combo_box(values: list[tuple[str, int]]) -> QComboBox:
         combo = QComboBox()
         combo.setFixedHeight(42)
         for label, data in values:
@@ -150,6 +150,9 @@ class MainWindow(QMainWindow):
         self._start_worker(denoise_level=denoise_level, scale_factor=scale_factor)
 
     def _start_worker(self, denoise_level: int, scale_factor: int) -> None:
+        # Guard against re-entry if the previous thread has not yet fully cleaned up.
+        if self._worker_thread is not None:
+            return
         self._is_running = True
         self._update_start_button_state()
         self.select_button.setEnabled(False)
@@ -186,6 +189,8 @@ class MainWindow(QMainWindow):
 
     @Slot(str, int, int)
     def _on_item_started(self, file_name: str, processed_count: int, total_count: int) -> None:
+        # processed_count is the 1-based index of the item now starting.
+        # Subtract 1 to show how many have *completed* so far.
         self.progress_label.setText(f"進行状況: {max(processed_count - 1, 0)}/{total_count}")
         self.current_file_label.setText(f"現在処理中: {file_name}")
 
@@ -261,7 +266,7 @@ class MainWindow(QMainWindow):
         self.result_label.setText("最終結果: 入力待機")
         self._update_start_button_state()
 
-    def closeEvent(self, event) -> None:
+    def closeEvent(self, event: QCloseEvent) -> None:
         if self._worker_thread is not None and self._worker_thread.isRunning():
             QMessageBox.information(self, "処理中", "処理中はウィンドウを閉じられません。完了後に閉じてください。")
             event.ignore()
