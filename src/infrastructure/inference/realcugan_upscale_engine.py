@@ -190,7 +190,8 @@ class RealCuganUpscaleEngine(UpscaleEnginePort):
             tmp_dir_path = Path(tmp_dir)
             input_png = tmp_dir_path / "input.png"
             output_png = tmp_dir_path / "output.png"
-            image.save(input_png, format="PNG")
+            prepared_input = self._prepare_for_realcugan_png(image)
+            prepared_input.save(input_png, format="PNG")
 
             command = [
                 str(self._realcugan_executable),
@@ -215,7 +216,21 @@ class RealCuganUpscaleEngine(UpscaleEnginePort):
                 return result_image.copy()
 
     @staticmethod
+    def _prepare_for_realcugan_png(image: "Image.Image") -> "Image.Image":
+        if image.mode in {"RGB", "RGBA", "L", "LA"}:
+            return image
+
+        if image.mode == "P":
+            if "transparency" in image.info:
+                return image.convert("RGBA")
+            return image.convert("RGB")
+
+        # Real-CUGAN に渡す一時 PNG へ保存できないモード (例: CMYK) は RGB へ正規化する。
+        return image.convert("RGB")
+
+    @staticmethod
     def _run_realcugan(command: list[str]) -> subprocess.CompletedProcess[str]:
+        creation_flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
         try:
             return subprocess.run(
                 command,
@@ -223,7 +238,7 @@ class RealCuganUpscaleEngine(UpscaleEnginePort):
                 text=True,
                 check=False,
                 timeout=1800,  # コマンドの無限ハング防止のため30分のタイムアウトを設定
-                creationflags=subprocess.CREATE_NO_WINDOW,  # Windows GUIアプリでコンソールウィンドウが表示されないよう抑制
+                creationflags=creation_flags,  # Windows GUIアプリでコンソールウィンドウが表示されないよう抑制
             )
         except subprocess.TimeoutExpired as exc:
             raise RuntimeError("Real-CUGAN execution timed out after 1800 seconds.") from exc

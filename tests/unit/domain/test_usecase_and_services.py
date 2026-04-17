@@ -82,7 +82,7 @@ class TestDomainServicesAndUseCase(unittest.TestCase):
         # Assert
         self.assertEqual(output.value, Path("C:/images/cat-denoise1x-up3x.jpg"))
 
-    def test_build_default_output_path_uses_off_label_when_denoise_is_minus_one(self) -> None:
+    def test_build_default_output_path_uses_minus_one_label_when_denoise_is_minus_one(self) -> None:
         # Arrange
         input_image = InputImagePath(Path("C:/images/cat.png"))
         scale_factor = ScaleFactor(2)
@@ -92,7 +92,7 @@ class TestDomainServicesAndUseCase(unittest.TestCase):
         output = build_default_output_path(input_image, scale_factor, denoise_level)
 
         # Assert
-        self.assertEqual(output.value, Path("C:/images/cat-denoiseoffx-up2x.png"))
+        self.assertEqual(output.value, Path("C:/images/cat-denoise-1x-up2x.png"))
 
     def test_run_upscale_usecase_runs_engine_and_saves_output(self) -> None:
         # Arrange

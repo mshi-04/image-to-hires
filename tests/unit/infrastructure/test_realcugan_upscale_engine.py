@@ -341,6 +341,36 @@ class TestRealCuganUpscaleEngine(unittest.TestCase):
                 self.assertEqual(output_image.size, (4, 4))
                 self.assertEqual(output_image.format, "PNG")
 
+    def test_upscale_accepts_cmyk_jpeg_input_for_realcugan_path(self) -> None:
+        # Arrange
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp_path = Path(tmp_dir)
+            input_path = tmp_path / "input.jpg"
+            output_path = tmp_path / "output.png"
+            Image.new("CMYK", (2, 2), color=(0, 128, 128, 0)).save(input_path, format="JPEG")
+            engine, _, _ = self._make_engine_with_stub(tmp_path)
+
+            def fake_runner(command: list[str]) -> subprocess.CompletedProcess[str]:
+                output_file = Path(command[command.index("-o") + 1])
+                Image.new("RGB", (4, 4), color=(10, 20, 30)).save(output_file, format="PNG")
+                return subprocess.CompletedProcess(args=command, returncode=0, stdout="", stderr="")
+
+            # Act
+            with mock.patch.object(engine, "_run_realcugan", side_effect=fake_runner):
+                result_bytes = engine.upscale(
+                    UpscaleJob(
+                        input_image=InputImagePath(input_path),
+                        output_image=OutputImagePath(output_path),
+                        scale_factor=ScaleFactor(2),
+                        denoise_level=DenoiseLevel(-1),
+                    )
+                )
+
+            # Assert
+            with Image.open(BytesIO(result_bytes)) as output_image:
+                self.assertEqual(output_image.size, (4, 4))
+                self.assertEqual(output_image.format, "PNG")
+
     def test_upscale_raises_when_realcugan_returns_non_zero(self) -> None:
         # Arrange
         with tempfile.TemporaryDirectory() as tmp_dir:

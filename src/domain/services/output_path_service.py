@@ -15,6 +15,6 @@ def build_default_output_path(
     stem = input_image.value.stem
     parent = input_image.value.parent
     suffix = input_image.value.suffix.lower()
-    denoise_label = "off" if denoise_level.value == -1 else str(denoise_level.value)
+    denoise_label = str(denoise_level.value)
     output_path = parent / f"{stem}-denoise{denoise_label}x-up{scale_factor.value}x{suffix}"
     return OutputImagePath(Path(output_path))

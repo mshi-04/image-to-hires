@@ -153,6 +153,18 @@ class MainWindow(QMainWindow):
         # Guard against re-entry if the previous thread has not yet fully cleaned up.
         if self._worker_thread is not None:
             return
+
+        try:
+            self._batch_usecase.ensure_runtime_ready()
+        except RuntimeError as exc:
+            message = str(exc) or "unknown error"
+            summary = message.splitlines()[0]
+            self.progress_label.setText("進行状況: 0/0")
+            self.current_file_label.setText("現在処理中: 開始前エラー")
+            self.result_label.setText(f"最終結果: 失敗 {summary}")
+            QMessageBox.critical(self, "処理失敗", message)
+            return
+
         self._is_running = True
         self._update_start_button_state()
         self.select_button.setEnabled(False)
@@ -220,7 +232,6 @@ class MainWindow(QMainWindow):
     @Slot(int, int)
     def _on_batch_finished(self, completed_count: int, failed_count: int) -> None:
         self._is_running = False
-        self.select_button.setEnabled(True)
         self._update_start_button_state()
         self.current_file_label.setText("現在処理中: 完了")
         self.result_label.setText(
@@ -230,7 +241,6 @@ class MainWindow(QMainWindow):
     @Slot(str)
     def _on_batch_failed(self, message: str) -> None:
         self._is_running = False
-        self.select_button.setEnabled(True)
         self._update_start_button_state()
         self.current_file_label.setText("現在処理中: 異常終了")
         self.result_label.setText(f"最終結果: 失敗 {message}")
@@ -240,6 +250,8 @@ class MainWindow(QMainWindow):
     def _on_worker_thread_finished(self) -> None:
         self._worker = None
         self._worker_thread = None
+        self.select_button.setEnabled(True)
+        self._update_start_button_state()
 
     def _update_file_display(self) -> None:
         file_names = [path.name for path in self._selected_files]
@@ -259,7 +271,8 @@ class MainWindow(QMainWindow):
         self.output_format_display.setText(f"入力と同じ ({formatted})")
 
     def _update_start_button_state(self) -> None:
-        self.start_button.setEnabled(bool(self._selected_files) and not self._is_running)
+        can_start = bool(self._selected_files) and not self._is_running and self._worker_thread is None
+        self.start_button.setEnabled(can_start)
 
     def _set_selected_files(self, files: list[Path]) -> None:
         self._selected_files = files
