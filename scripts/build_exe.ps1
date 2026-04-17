@@ -4,8 +4,9 @@ $ErrorActionPreference = "Stop"
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repoRoot = Resolve-Path (Join-Path $scriptDir "..")
 $specPath = Join-Path $repoRoot "image_to_hires.spec"
-$realcuganExe = Join-Path $repoRoot "bin\realcugan\realcugan-ncnn-vulkan.exe"
-$realcuganModelsDir = Join-Path $repoRoot "models\realcugan\models-se"
+$realcuganBinDir = Join-Path (Join-Path $repoRoot "bin") "realcugan"
+$realcuganExe = Join-Path $realcuganBinDir "realcugan-ncnn-vulkan.exe"
+$realcuganModelsDir = Join-Path (Join-Path (Join-Path $repoRoot "models") "realcugan") "models-se"
 
 if (-not (Test-Path -LiteralPath $specPath)) {
     throw "Spec file not found: $specPath"
