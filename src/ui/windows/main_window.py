@@ -183,6 +183,8 @@ class MainWindow(QMainWindow):
 
     @Slot(int)
     def _on_batch_started(self, total_count: int) -> None:
+        self._is_running = True
+        self._update_start_button_state()
         self.progress_label.setText(f"進行状況: 0/{total_count}")
         self.current_file_label.setText("現在処理中: 開始")
         self.result_label.setText("最終結果: 処理中")

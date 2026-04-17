@@ -23,8 +23,8 @@ except ModuleNotFoundError:
 class FakeBatchUseCase:
     def execute(self, command, item_started_callback=None, progress_callback=None):  # noqa: ANN001
         paths = [Path(p) for p in command.input_image_paths]
-        scale = ScaleFactor(command.scale_factor) if PYSIDE_AVAILABLE else None
-        denoise = DenoiseLevel(command.denoise_level) if PYSIDE_AVAILABLE else None
+        scale = ScaleFactor(command.scale_factor)
+        denoise = DenoiseLevel(command.denoise_level)
         items = []
         if paths:
             if item_started_callback:
@@ -73,7 +73,8 @@ class TestMainWindow(unittest.TestCase):
 
     def test_file_selection_updates_file_list_and_format(self) -> None:
         # Arrange
-        selected = [r"C:\images\a.png", r"C:\images\b.png"]
+        base = Path.cwd() / "images"
+        selected = [str(base / "a.png"), str(base / "b.png")]
 
         # Act
         with patch("src.ui.windows.main_window.QFileDialog.getOpenFileNames", return_value=(selected, "")):
@@ -86,7 +87,8 @@ class TestMainWindow(unittest.TestCase):
 
     def test_file_selection_with_mixed_extensions_shows_mixed_label(self) -> None:
         # Arrange
-        selected = [r"C:\images\a.png", r"C:\images\b.jpg", r"C:\images\c.webp"]
+        base = Path.cwd() / "images"
+        selected = [str(base / "a.png"), str(base / "b.jpg"), str(base / "c.webp")]
 
         # Act
         with patch("src.ui.windows.main_window.QFileDialog.getOpenFileNames", return_value=(selected, "")):
@@ -97,19 +99,16 @@ class TestMainWindow(unittest.TestCase):
 
     def test_start_button_disabled_while_running_and_enabled_after_finish(self) -> None:
         # Arrange
-        self.window._selected_files = [Path(r"C:\images\a.png")]
+        self.window._selected_files = [Path.cwd() / "images" / "a.png"]
         self.window._update_start_button_state()
 
         # Act
         self.window._on_batch_started(1)
-        # TODO: テストが内部状態 (_is_running) を直接操作している。
-        #   _on_batch_started でフラグを立てる設計への変更、またはパブリック API を
-        #   介したテスト方法を検討する。
-        self.window._is_running = True
         self.window._update_start_button_state()
         running_state = self.window.start_button.isEnabled()
 
         self.window._on_batch_finished(1, 0)
+        self.window._update_start_button_state()
         completed_state = self.window.start_button.isEnabled()
 
         # Assert
