@@ -82,7 +82,38 @@ class TestRealCuganUpscaleEngine(unittest.TestCase):
             self.assertEqual(engine._realcugan_executable, repo_executable)
             self.assertEqual(engine._realcugan_models_dir, repo_models_dir)
 
-    def test_ensure_work_directory_uses_project_tmp_folder(self) -> None:
+    def test_ensure_work_directory_uses_output_parent_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            base_path = Path(tmp_dir)
+            engine = RealCuganUpscaleEngine(prefer_realcugan=False)
+            output_path = base_path / "outputs" / "result.png"
+
+            with mock.patch.object(engine, "_get_current_working_directory", return_value=base_path):
+                work_directory = engine._ensure_work_directory(output_path)
+
+            self.assertEqual(work_directory.parent, output_path.parent.resolve(strict=False))
+            self.assertTrue(work_directory.name.startswith(".tmp-realcugan-"))
+            self.assertTrue(work_directory.is_dir())
+
+    def test_ensure_work_directory_isolated_per_engine_instance(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            base_path = Path(tmp_dir)
+            first = RealCuganUpscaleEngine(prefer_realcugan=False)
+            second = RealCuganUpscaleEngine(prefer_realcugan=False)
+            output_path = base_path / "outputs" / "result.png"
+
+            with (
+                mock.patch.object(first, "_get_current_working_directory", return_value=base_path),
+                mock.patch.object(second, "_get_current_working_directory", return_value=base_path),
+            ):
+                first_dir = first._ensure_work_directory(output_path)
+                second_dir = second._ensure_work_directory(output_path)
+
+            self.assertNotEqual(first_dir, second_dir)
+            self.assertEqual(first_dir.parent, output_path.parent.resolve(strict=False))
+            self.assertEqual(second_dir.parent, output_path.parent.resolve(strict=False))
+
+    def test_ensure_work_directory_falls_back_to_project_tmp_without_output_path(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             base_path = Path(tmp_dir)
             engine = RealCuganUpscaleEngine(prefer_realcugan=False)
@@ -93,25 +124,6 @@ class TestRealCuganUpscaleEngine(unittest.TestCase):
             expected_root = (base_path / "tmp" / "realcugan-work").resolve(strict=False)
             self.assertEqual(work_directory.parent, expected_root)
             self.assertTrue(work_directory.is_dir())
-            self.assertTrue(work_directory.name)
-
-    def test_ensure_work_directory_isolated_per_engine_instance(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            base_path = Path(tmp_dir)
-            first = RealCuganUpscaleEngine(prefer_realcugan=False)
-            second = RealCuganUpscaleEngine(prefer_realcugan=False)
-
-            with (
-                mock.patch.object(first, "_get_current_working_directory", return_value=base_path),
-                mock.patch.object(second, "_get_current_working_directory", return_value=base_path),
-            ):
-                first_dir = first._ensure_work_directory()
-                second_dir = second._ensure_work_directory()
-
-            expected_root = (base_path / "tmp" / "realcugan-work").resolve(strict=False)
-            self.assertNotEqual(first_dir, second_dir)
-            self.assertEqual(first_dir.parent, expected_root)
-            self.assertEqual(second_dir.parent, expected_root)
 
     def test_ensure_runtime_ready_prefers_executable_parent_before_repo_root(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -333,9 +345,10 @@ class TestRealCuganUpscaleEngine(unittest.TestCase):
 
             with mock.patch.object(engine, "_run_realcugan", side_effect=fake_runner) as runner:
                 artifact = engine.upscale(self._make_job(input_path, output_path, 2, 0))
-
-            self.assertEqual(runner.call_args.args[0][runner.call_args.args[0].index("-j") + 1], "2:2:2")
-            artifact.cleanup()
+            try:
+                self.assertEqual(runner.call_args.args[0][runner.call_args.args[0].index("-j") + 1], "2:2:2")
+            finally:
+                artifact.cleanup()
 
     def test_upscale_uses_small_thread_config_for_exact_boundary_image(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -352,9 +365,10 @@ class TestRealCuganUpscaleEngine(unittest.TestCase):
 
             with mock.patch.object(engine, "_run_realcugan", side_effect=fake_runner) as runner:
                 artifact = engine.upscale(self._make_job(input_path, output_path, 2, 0))
-
-            self.assertEqual(runner.call_args.args[0][runner.call_args.args[0].index("-j") + 1], "4:4:4")
-            artifact.cleanup()
+            try:
+                self.assertEqual(runner.call_args.args[0][runner.call_args.args[0].index("-j") + 1], "4:4:4")
+            finally:
+                artifact.cleanup()
 
     def test_upscale_uses_low_thread_config_for_just_above_boundary_image(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -371,9 +385,10 @@ class TestRealCuganUpscaleEngine(unittest.TestCase):
 
             with mock.patch.object(engine, "_run_realcugan", side_effect=fake_runner) as runner:
                 artifact = engine.upscale(self._make_job(input_path, output_path, 2, 0))
-
-            self.assertEqual(runner.call_args.args[0][runner.call_args.args[0].index("-j") + 1], "2:2:2")
-            artifact.cleanup()
+            try:
+                self.assertEqual(runner.call_args.args[0][runner.call_args.args[0].index("-j") + 1], "2:2:2")
+            finally:
+                artifact.cleanup()
 
     def test_upscale_reuses_work_directory_and_cleans_intermediate_files(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:

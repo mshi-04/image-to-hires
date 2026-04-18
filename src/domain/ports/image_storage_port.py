@@ -8,4 +8,4 @@ class ImageStoragePort(Protocol):
     """Boundary for image persistence implementation."""
 
     def save(self, artifact: GeneratedImageArtifact, output_image: OutputImagePath) -> None:
-        """Promote a temporary generated image artifact to the target output path."""
+        """Promote an artifact to output and always run ``artifact.cleanup()`` even on failures."""

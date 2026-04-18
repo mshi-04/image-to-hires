@@ -32,13 +32,16 @@ class TestFileImageStorage(unittest.TestCase):
             missing_source = Path(tmp_dir) / "work" / "missing.png"
             output_path = Path(tmp_dir) / "result.png"
             storage = FileImageStorage()
+            cleanup = mock.Mock()
             artifact = GeneratedImageArtifact(
                 temporary_path=missing_source,
-                cleanup=lambda: None,
+                cleanup=cleanup,
             )
 
             with self.assertRaises(FileNotFoundError):
                 storage.save(artifact, OutputImagePath(output_path))
+
+            cleanup.assert_called_once()
 
     def test_save_keeps_existing_file_when_replace_fails(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
