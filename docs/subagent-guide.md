@@ -185,6 +185,9 @@
 
 AI 向けの作業方針を変えた場合は、少なくとも次の文書を同じ PR で整合させる。
 
+- `AGENTS.md`
+- `docs/requirements.md`
+- `docs/technical-design.md`
 - `docs/coding-standards.md`
 - `docs/unit-test-guidelines.md`
 - `docs/rules/coding-standards.md`

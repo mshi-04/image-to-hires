@@ -82,7 +82,7 @@ class TestDomainServicesAndUseCase(unittest.TestCase):
                 # Assert
                 self.assertEqual(output.value, Path(expected))
 
-    def test_run_upscale_usecase_uses_explicit_output_path_as_is(self) -> None:
+    def test_run_upscale_usecase_normalizes_explicit_output_extension(self) -> None:
         # Arrange
         usecase, fake_engine, fake_storage = self._build_usecase()
 
@@ -99,10 +99,10 @@ class TestDomainServicesAndUseCase(unittest.TestCase):
         # Assert
         self.assertEqual(
             fake_engine.calls,
-            [(Path("C:/images/input.jpg"), 2, 0, Path("C:/images/custom-output.png"))],
+            [(Path("C:/images/input.jpg"), 2, 0, Path("C:/images/custom-output.jpg"))],
         )
-        self.assertEqual(fake_storage.calls, [Path("C:/images/custom-output.png")])
-        self.assertEqual(result.output_image_path.value, Path("C:/images/custom-output.png"))
+        self.assertEqual(fake_storage.calls, [Path("C:/images/custom-output.jpg")])
+        self.assertEqual(result.output_image_path.value, Path("C:/images/custom-output.jpg"))
 
     def test_run_upscale_usecase_builds_default_output_when_output_path_is_none(self) -> None:
         # Arrange
@@ -181,7 +181,7 @@ class TestDomainServicesAndUseCase(unittest.TestCase):
             ],
         )
 
-    def test_run_upscale_batch_usecase_keeps_explicit_output_extensions(self) -> None:
+    def test_run_upscale_batch_usecase_normalizes_explicit_output_extensions(self) -> None:
         # Arrange
         fake_engine = FakeUpscaleEngine()
         fake_storage = FakeImageStorage()
@@ -203,7 +203,7 @@ class TestDomainServicesAndUseCase(unittest.TestCase):
             fake_engine.calls,
             [
                 (Path("C:/images/a.png"), 2, 1, Path("C:/out/a.png")),
-                (Path("C:/images/b.jpg"), 2, 1, Path("C:/out/b.jpeg")),
+                (Path("C:/images/b.jpg"), 2, 1, Path("C:/out/b.jpg")),
             ],
         )
 

@@ -8,13 +8,24 @@ class TestScaleFactor(unittest.TestCase):
     def test_scale_factor_accepts_supported_values(self) -> None:
         for value in [2, 3, 4]:
             with self.subTest(value=value):
-                self.assertEqual(ScaleFactor(value).value, value)
+                # Arrange
+                candidate = value
+
+                # Act
+                actual = ScaleFactor(candidate)
+
+                # Assert
+                self.assertEqual(actual.value, candidate)
 
     def test_scale_factor_rejects_unsupported_values(self) -> None:
         for value in [1, 5]:
             with self.subTest(value=value):
+                # Arrange
+                candidate = value
+
+                # Act / Assert
                 with self.assertRaises(UnsupportedScaleFactorError):
-                    ScaleFactor(value)
+                    ScaleFactor(candidate)
 
     def test_scale_factor_rejects_non_integer_number(self) -> None:
         with self.assertRaises(UnsupportedScaleFactorError):
