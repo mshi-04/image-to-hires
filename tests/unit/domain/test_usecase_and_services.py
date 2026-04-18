@@ -82,6 +82,23 @@ class TestDomainServicesAndUseCase(unittest.TestCase):
         # Assert
         self.assertEqual(output.value, Path("C:/images/cat-denoise1x-up3x.jpg"))
 
+    def test_build_default_output_path_forces_webp_extension_when_requested(self) -> None:
+        # Arrange
+        input_image = InputImagePath(Path("C:/images/cat.jpg"))
+        scale_factor = ScaleFactor(4)
+        denoise_level = DenoiseLevel(2)
+
+        # Act
+        output = build_default_output_path(
+            input_image,
+            scale_factor,
+            denoise_level,
+            "webp_lossless",
+        )
+
+        # Assert
+        self.assertEqual(output.value, Path("C:/images/cat-denoise2x-up4x.webp"))
+
     def test_build_default_output_path_uses_minus_one_label_when_denoise_is_minus_one(self) -> None:
         # Arrange
         input_image = InputImagePath(Path("C:/images/cat.png"))
@@ -120,6 +137,61 @@ class TestDomainServicesAndUseCase(unittest.TestCase):
         self.assertEqual(result.scale_factor.value, 2)
         self.assertEqual(result.denoise_level.value, 1)
         self.assertEqual(result.output_image_path.value, Path("C:/images/output.png"))
+
+    def test_run_upscale_usecase_uses_webp_lossless_default_output_when_mode_is_webp_lossless(self) -> None:
+        # Arrange
+        fake_engine = FakeUpscaleEngine()
+        fake_storage = FakeImageStorage()
+        usecase = RunUpscaleUseCase(upscale_engine=fake_engine, image_storage=fake_storage)
+
+        # Act
+        result = usecase.execute(
+            RunUpscaleCommand(
+                input_image_path=Path("C:/images/input.jpg"),
+                scale_factor=3,
+                denoise_level=0,
+                output_format_mode="webp_lossless",
+            )
+        )
+
+        # Assert
+        self.assertEqual(
+            fake_engine.calls,
+            [(Path("C:/images/input.jpg"), 3, 0, Path("C:/images/input-denoise0x-up3x.webp"))],
+        )
+        self.assertEqual(
+            fake_storage.calls,
+            [(b"upscaled-image", Path("C:/images/input-denoise0x-up3x.webp"))],
+        )
+        self.assertEqual(result.output_image_path.value, Path("C:/images/input-denoise0x-up3x.webp"))
+
+    def test_run_upscale_usecase_forces_explicit_output_to_webp_when_mode_is_webp_lossless(self) -> None:
+        # Arrange
+        fake_engine = FakeUpscaleEngine()
+        fake_storage = FakeImageStorage()
+        usecase = RunUpscaleUseCase(upscale_engine=fake_engine, image_storage=fake_storage)
+
+        # Act
+        result = usecase.execute(
+            RunUpscaleCommand(
+                input_image_path=Path("C:/images/input.jpg"),
+                output_image_path=Path("C:/images/custom-output.png"),
+                scale_factor=2,
+                denoise_level=0,
+                output_format_mode="webp_lossless",
+            )
+        )
+
+        # Assert
+        self.assertEqual(
+            fake_engine.calls,
+            [(Path("C:/images/input.jpg"), 2, 0, Path("C:/images/custom-output.webp"))],
+        )
+        self.assertEqual(
+            fake_storage.calls,
+            [(b"upscaled-image", Path("C:/images/custom-output.webp"))],
+        )
+        self.assertEqual(result.output_image_path.value, Path("C:/images/custom-output.webp"))
 
     def test_run_upscale_batch_usecase_continues_when_one_item_fails(self) -> None:
         # Arrange
@@ -223,6 +295,103 @@ class TestDomainServicesAndUseCase(unittest.TestCase):
                 (Path("C:/images/ok.png"), 1, 3),
                 (Path("C:/images/fail.png"), 2, 3),
                 (Path("C:/images/ok2.webp"), 3, 3),
+            ],
+        )
+
+    def test_run_upscale_batch_usecase_forces_webp_output_for_all_items_when_requested(self) -> None:
+        # Arrange
+        input_paths = [
+            Path("C:/images/ok.png"),
+            Path("C:/images/fail.jpg"),
+            Path("C:/images/ok2.webp"),
+        ]
+        fake_engine = FakeUpscaleEngine(fail_input_paths={Path("C:/images/fail.jpg")})
+        fake_storage = FakeImageStorage()
+        usecase = RunUpscaleBatchUseCase(upscale_engine=fake_engine, image_storage=fake_storage)
+
+        # Act
+        result = usecase.execute(
+            RunUpscaleBatchCommand(
+                input_image_paths=input_paths,
+                scale_factor=2,
+                denoise_level=3,
+                output_format_mode="webp_lossless",
+            )
+        )
+
+        # Assert
+        self.assertEqual(result.total_count, 3)
+        self.assertEqual(result.processed_count, 3)
+        self.assertEqual(result.success_count, 2)
+        self.assertEqual(result.failure_count, 1)
+        self.assertEqual(fake_engine.ready_calls, 1)
+        self.assertEqual(
+            [item.output_image_path for item in result.items],
+            [
+                Path("C:/images/ok-denoise3x-up2x.webp"),
+                Path("C:/images/fail-denoise3x-up2x.webp"),
+                Path("C:/images/ok2-denoise3x-up2x.webp"),
+            ],
+        )
+        self.assertEqual(
+            fake_engine.calls,
+            [
+                (
+                    Path("C:/images/ok.png"),
+                    2,
+                    3,
+                    Path("C:/images/ok-denoise3x-up2x.webp"),
+                ),
+                (
+                    Path("C:/images/fail.jpg"),
+                    2,
+                    3,
+                    Path("C:/images/fail-denoise3x-up2x.webp"),
+                ),
+                (
+                    Path("C:/images/ok2.webp"),
+                    2,
+                    3,
+                    Path("C:/images/ok2-denoise3x-up2x.webp"),
+                ),
+            ],
+        )
+        self.assertEqual(
+            fake_storage.calls,
+            [
+                (b"upscaled-image", Path("C:/images/ok-denoise3x-up2x.webp")),
+                (b"upscaled-image", Path("C:/images/ok2-denoise3x-up2x.webp")),
+            ],
+        )
+
+    def test_run_upscale_batch_usecase_forces_explicit_outputs_to_webp_when_mode_is_webp_lossless(self) -> None:
+        # Arrange
+        fake_engine = FakeUpscaleEngine()
+        fake_storage = FakeImageStorage()
+        usecase = RunUpscaleBatchUseCase(upscale_engine=fake_engine, image_storage=fake_storage)
+
+        # Act
+        result = usecase.execute(
+            RunUpscaleBatchCommand(
+                input_image_paths=[Path("C:/images/a.png"), Path("C:/images/b.jpg")],
+                output_image_paths=[Path("C:/out/a.png"), Path("C:/out/b.jpeg")],
+                scale_factor=2,
+                denoise_level=1,
+                output_format_mode="webp_lossless",
+            )
+        )
+
+        # Assert
+        self.assertEqual(result.success_count, 2)
+        self.assertEqual(
+            [item.output_image_path for item in result.items],
+            [Path("C:/out/a.webp"), Path("C:/out/b.webp")],
+        )
+        self.assertEqual(
+            fake_engine.calls,
+            [
+                (Path("C:/images/a.png"), 2, 1, Path("C:/out/a.webp")),
+                (Path("C:/images/b.jpg"), 2, 1, Path("C:/out/b.webp")),
             ],
         )
 

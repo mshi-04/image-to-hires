@@ -239,6 +239,43 @@ class TestRealCuganUpscaleEngine(unittest.TestCase):
                 self.assertEqual(output_image.size, (9, 9))
                 self.assertEqual(output_image.format, "WEBP")
 
+    def test_upscale_saves_webp_lossless_when_output_is_webp(self) -> None:
+        # Arrange
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            input_path = Path(tmp_dir) / "input.png"
+            Image.new("RGB", (3, 3), color=(20, 30, 40)).save(input_path, format="PNG")
+            output_path = Path(tmp_dir) / "output.webp"
+            engine = RealCuganUpscaleEngine(prefer_realcugan=False)
+            captured_save_options: dict[str, object] = {}
+            original_save = Image.Image.save
+
+            def capture_save(image_self, fp, *args, **params):  # noqa: ANN001, ANN002, ANN003
+                image_format = args[0] if args else params.get("format")
+                save_params = params.copy()
+                save_params.pop("format", None)
+                if image_format == "WEBP":
+                    captured_save_options["format"] = image_format
+                    captured_save_options["params"] = save_params
+                return original_save(image_self, fp, *args, **params)
+
+            # Act
+            with mock.patch.object(Image.Image, "save", new=capture_save):
+                result_bytes = engine.upscale(
+                    UpscaleJob(
+                        input_image=InputImagePath(input_path),
+                        output_image=OutputImagePath(output_path),
+                        scale_factor=ScaleFactor(3),
+                        denoise_level=DenoiseLevel(0),
+                    )
+                )
+
+            # Assert
+            self.assertEqual(captured_save_options["format"], "WEBP")
+            self.assertEqual(captured_save_options["params"], {"lossless": True, "quality": 100})
+            with Image.open(BytesIO(result_bytes)) as output_image:
+                self.assertEqual(output_image.size, (9, 9))
+                self.assertEqual(output_image.format, "WEBP")
+
     def test_upscale_raises_for_missing_input_path(self) -> None:
         # Arrange
         with tempfile.TemporaryDirectory() as tmp_dir:
