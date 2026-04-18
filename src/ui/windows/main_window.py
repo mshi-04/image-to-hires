@@ -151,11 +151,14 @@ class MainWindow(QMainWindow):
 
         denoise_level = int(self.denoise_combo.currentData())
         scale_factor = int(self.scale_combo.currentData())
-        output_format_mode = str(self.output_format_combo.currentData())
+        output_format_mode_data = self.output_format_combo.currentData()
+        if not isinstance(output_format_mode_data, str):
+            raise RuntimeError("Output format selection is invalid.")
+
         self._start_worker(
             denoise_level=denoise_level,
             scale_factor=scale_factor,
-            output_format_mode=output_format_mode,
+            output_format_mode=output_format_mode_data,
         )
 
     def _start_worker(self, denoise_level: int, scale_factor: int, output_format_mode: str) -> None:

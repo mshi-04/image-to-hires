@@ -154,21 +154,6 @@ class TestMainWindow(unittest.TestCase):
 
     def test_worker_passes_selected_output_format_mode_to_command(self) -> None:
         # Arrange
-        class CapturingCommand:
-            def __init__(
-                self,
-                input_image_paths,
-                scale_factor,
-                denoise_level,
-                output_format_mode=None,
-                output_image_paths=None,
-            ) -> None:
-                self.input_image_paths = input_image_paths
-                self.scale_factor = scale_factor
-                self.denoise_level = denoise_level
-                self.output_format_mode = output_format_mode
-                self.output_image_paths = output_image_paths
-
         fake_usecase = FakeBatchUseCase()
         worker = UpscaleQueueWorker(
             batch_usecase=fake_usecase,
@@ -179,8 +164,7 @@ class TestMainWindow(unittest.TestCase):
         )
 
         # Act
-        with patch("src.ui.workers.upscale_queue_worker.RunUpscaleBatchCommand", CapturingCommand):
-            worker.run()
+        worker.run()
 
         # Assert
         self.assertIsNotNone(fake_usecase.last_command)
