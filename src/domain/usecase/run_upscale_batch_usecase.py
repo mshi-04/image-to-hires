@@ -85,7 +85,10 @@ class RunUpscaleBatchUseCase:
                 input_image = InputImagePath(current_input_path)
                 output_candidate = output_image_paths[index] if output_image_paths is not None else None
                 if output_candidate is not None:
-                    output_image = OutputImagePath(Path(output_candidate))
+                    output_path = Path(output_candidate)
+                    if command.output_format_mode == "webp_lossless":
+                        output_path = output_path.with_suffix(".webp")
+                    output_image = OutputImagePath(output_path)
                 else:
                     output_image = build_default_output_path(
                         input_image,
@@ -101,6 +104,7 @@ class RunUpscaleBatchUseCase:
                         output_image_path=output_image.value,
                         scale_factor=scale_factor.value,
                         denoise_level=denoise_level.value,
+                        output_format_mode=command.output_format_mode,
                     )
                 )
                 item_result = UpscaleBatchItemResult(

@@ -43,7 +43,10 @@ class RunUpscaleUseCase:
         denoise_level = DenoiseLevel(command.denoise_level)
 
         if command.output_image_path:
-            output_image = OutputImagePath(Path(command.output_image_path))
+            output_path = Path(command.output_image_path)
+            if command.output_format_mode == "webp_lossless":
+                output_path = output_path.with_suffix(".webp")
+            output_image = OutputImagePath(output_path)
         else:
             output_image = build_default_output_path(
                 input_image,

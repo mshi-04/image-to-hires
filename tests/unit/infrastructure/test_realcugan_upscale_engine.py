@@ -249,11 +249,14 @@ class TestRealCuganUpscaleEngine(unittest.TestCase):
             captured_save_options: dict[str, object] = {}
             original_save = Image.Image.save
 
-            def capture_save(image_self, fp, format=None, **params):  # noqa: ANN001, ANN002
-                if format == "WEBP":
-                    captured_save_options["format"] = format
-                    captured_save_options["params"] = params.copy()
-                return original_save(image_self, fp, format=format, **params)
+            def capture_save(image_self, fp, *args, **params):  # noqa: ANN001, ANN002, ANN003
+                image_format = args[0] if args else params.get("format")
+                save_params = params.copy()
+                save_params.pop("format", None)
+                if image_format == "WEBP":
+                    captured_save_options["format"] = image_format
+                    captured_save_options["params"] = save_params
+                return original_save(image_self, fp, *args, **params)
 
             # Act
             with mock.patch.object(Image.Image, "save", new=capture_save):
