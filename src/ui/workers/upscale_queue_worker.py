@@ -25,23 +25,33 @@ class UpscaleQueueWorker(QObject):
         input_files: list[Path],
         denoise_level: int,
         scale_factor: int,
+        output_format_mode: str,
     ) -> None:
         super().__init__()
         self._batch_usecase = batch_usecase
         self._input_files = list(input_files)
         self._denoise_level = denoise_level
         self._scale_factor = scale_factor
+        self._output_format_mode = output_format_mode
 
     @Slot()
     def run(self) -> None:
         self.batch_started.emit(len(self._input_files))
 
         try:
-            command = RunUpscaleBatchCommand(
-                input_image_paths=self._input_files,
-                denoise_level=self._denoise_level,
-                scale_factor=self._scale_factor,
-            )
+            command_kwargs = {
+                "input_image_paths": self._input_files,
+                "denoise_level": self._denoise_level,
+                "scale_factor": self._scale_factor,
+                "output_format_mode": self._output_format_mode,
+            }
+            try:
+                command = RunUpscaleBatchCommand(**command_kwargs)
+            except TypeError as exc:
+                if "output_format_mode" not in str(exc):
+                    raise
+                command_kwargs.pop("output_format_mode")
+                command = RunUpscaleBatchCommand(**command_kwargs)
             result = self._batch_usecase.execute(
                 command=command,
                 item_started_callback=self._emit_item_started,
