@@ -17,6 +17,7 @@
 - `models/`: 推論に使う学習済み重みを置く
 - `artifacts/`: 変換中の検証用成果物や一時的な比較出力を置く
 - `outputs/`: 手動確認で保存した出力画像を置く
+- `tmp/realcugan-work/`: Real-CUGAN 実行時の一時入力と一時出力 (`input.png` / `output.png`) を置く
 
 これらは大きなバイナリを含みやすいため、`.gitignore` で除外している。
 

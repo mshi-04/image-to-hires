@@ -27,7 +27,6 @@ class FileImageStorage(ImageStoragePort):
             with os.fdopen(temp_fd, "wb") as temp_file:
                 temp_file.write(image_bytes)
                 temp_file.flush()
-                os.fsync(temp_file.fileno())
 
             os.replace(temp_path, output_path)
         except Exception:

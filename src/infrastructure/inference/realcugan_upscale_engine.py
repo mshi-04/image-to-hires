@@ -1,9 +1,10 @@
+import os
 import subprocess
 import sys
-import tempfile
 from io import BytesIO
 from pathlib import Path
 from typing import TYPE_CHECKING
+from uuid import uuid4
 
 from src.domain.entities.upscale_job import UpscaleJob
 from src.domain.ports.upscale_engine_port import UpscaleEnginePort
@@ -17,6 +18,14 @@ class RealCuganUpscaleEngine(UpscaleEnginePort):
 
     _EXECUTABLE_RELATIVE_PATH = Path("bin") / "realcugan" / "realcugan-ncnn-vulkan.exe"
     _MODELS_RELATIVE_PATH = Path("models") / "realcugan" / "models-se"
+    # 1024x1024ピクセルを境界として、小さい画像はスレッドを多く(4:4:4)、大きい画像は少なく(2:2:2)割り当てる
+    # 大きい画像でスレッド数を増やすとVRAM消費が増大し、並行処理によるオーバーヘッドも大きくなるための経験則
+    _THREAD_CONFIG_PIXEL_THRESHOLD = 1_048_576  # 1024x1024 pixels
+    _SMALL_IMAGE_THREAD_CONFIG = "4:4:4"
+    _LARGE_IMAGE_THREAD_CONFIG = "2:2:2"
+    _TEMP_INPUT_NAME = "input.png"
+    _TEMP_OUTPUT_NAME = "output.png"
+    _WORK_DIRECTORY_RELATIVE_PATH = Path("tmp") / "realcugan-work"
 
     def __init__(
         self,
@@ -34,6 +43,8 @@ class RealCuganUpscaleEngine(UpscaleEnginePort):
         self._realcugan_executable: Path | None = self._configured_realcugan_executable
         self._realcugan_models_dir: Path | None = self._configured_realcugan_models_dir
         self._runtime_ready = False
+        self._work_directory: Path | None = None
+        self._work_directory_id = f"{os.getpid()}-{uuid4().hex}"
 
     def ensure_runtime_ready(self) -> None:
         if not self._prefer_realcugan or self._runtime_ready:
@@ -186,10 +197,12 @@ class RealCuganUpscaleEngine(UpscaleEnginePort):
         if self._realcugan_executable is None or self._realcugan_models_dir is None:
             raise RuntimeError("Real-CUGAN runtime paths are unresolved.")
 
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            tmp_dir_path = Path(tmp_dir)
-            input_png = tmp_dir_path / "input.png"
-            output_png = tmp_dir_path / "output.png"
+        work_directory = self._ensure_work_directory()
+        input_png = work_directory / self._TEMP_INPUT_NAME
+        output_png = work_directory / self._TEMP_OUTPUT_NAME
+        # 前回のジョブが異常終了などで残したファイルを念のためクリーンアップする
+        self._cleanup_work_files(input_png, output_png)
+        try:
             prepared_input = self._prepare_for_realcugan_png(image)
             prepared_input.save(input_png, format="PNG")
 
@@ -200,6 +213,8 @@ class RealCuganUpscaleEngine(UpscaleEnginePort):
                 "-s", str(job.scale_factor.value),
                 "-n", str(job.denoise_level.value),
                 "-m", str(self._realcugan_models_dir),
+                "-t", "0",  # タイルサイズを自動決定させる
+                "-j", self._resolve_thread_config(prepared_input),
                 "-f", "png",
                 # "-x",  # TTAを有効にすると処理時間が数倍に延びるためMVPでは無効化する
             ]
@@ -214,6 +229,51 @@ class RealCuganUpscaleEngine(UpscaleEnginePort):
 
             with Image.open(output_png) as result_image:
                 return result_image.copy()
+        finally:
+            self._cleanup_work_files(input_png, output_png)
+
+    def _ensure_work_directory(self) -> Path:
+        if self._work_directory is not None and self._work_directory.is_dir():
+            return self._work_directory
+
+        self._work_directory = (
+            self._get_current_working_directory()
+            / self._WORK_DIRECTORY_RELATIVE_PATH
+            / self._work_directory_id
+        ).resolve(strict=False)
+        self._work_directory.mkdir(parents=True, exist_ok=True)
+        return self._work_directory
+
+    def _cleanup_work_files(self, input_png: Path, output_png: Path) -> None:
+        self._remove_file_if_exists(input_png)
+        self._remove_file_if_exists(output_png)
+
+    @staticmethod
+    def _remove_file_if_exists(file_path: Path) -> None:
+        file_path.unlink(missing_ok=True)
+
+    def _resolve_thread_config(self, image: "Image.Image") -> str:
+        pixel_count = image.width * image.height
+        if pixel_count <= self._THREAD_CONFIG_PIXEL_THRESHOLD:
+            return self._SMALL_IMAGE_THREAD_CONFIG
+        return self._LARGE_IMAGE_THREAD_CONFIG
+
+    def __del__(self) -> None:
+        if self._work_directory is None:
+            return
+        self._cleanup_work_files(
+            self._work_directory / self._TEMP_INPUT_NAME,
+            self._work_directory / self._TEMP_OUTPUT_NAME,
+        )
+        self._remove_empty_directory_if_exists(self._work_directory)
+
+    @staticmethod
+    def _remove_empty_directory_if_exists(directory_path: Path) -> None:
+        try:
+            directory_path.rmdir()
+        except OSError:
+            # ファイル残存や他要因で削除不可でも、処理本体には影響しないため無視する。
+            pass
 
     @staticmethod
     def _prepare_for_realcugan_png(image: "Image.Image") -> "Image.Image":
