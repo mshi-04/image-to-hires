@@ -62,8 +62,8 @@ class RunUpscaleUseCase:
             denoise_level=denoise_level,
         )
 
-        upscaled_image = self._upscale_engine.upscale(job)
-        self._image_storage.save(upscaled_image, job.output_image)
+        generated_artifact = self._upscale_engine.upscale(job)
+        self._image_storage.save(generated_artifact, job.output_image)
 
         return RunUpscaleResult(
             output_image_path=job.output_image,

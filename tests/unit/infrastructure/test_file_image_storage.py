@@ -3,57 +3,83 @@ import unittest
 from unittest import mock
 from pathlib import Path
 
+from src.domain.entities.generated_image_artifact import GeneratedImageArtifact
 from src.domain.value_objects.image_path import OutputImagePath
 from src.infrastructure.image_io.file_image_storage import FileImageStorage
 
 
 class TestFileImageStorage(unittest.TestCase):
-    def test_save_writes_bytes_to_output_path(self) -> None:
+    def test_save_promotes_artifact_to_output_path(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
+            temp_source = Path(tmp_dir) / "work" / "generated.png"
+            temp_source.parent.mkdir(parents=True, exist_ok=True)
+            temp_source.write_bytes(b"encoded-image")
             output_path = Path(tmp_dir) / "nested" / "result.png"
             storage = FileImageStorage()
 
-            storage.save(b"encoded-image", OutputImagePath(output_path))
+            artifact = GeneratedImageArtifact(
+                temporary_path=temp_source,
+                cleanup=lambda: None,
+            )
+            storage.save(artifact, OutputImagePath(output_path))
 
             self.assertTrue(output_path.exists())
             self.assertEqual(output_path.read_bytes(), b"encoded-image")
+            self.assertFalse(temp_source.exists())
 
-    def test_save_raises_for_empty_image_bytes(self) -> None:
+    def test_save_raises_for_missing_artifact_path(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
+            missing_source = Path(tmp_dir) / "work" / "missing.png"
             output_path = Path(tmp_dir) / "result.png"
             storage = FileImageStorage()
+            artifact = GeneratedImageArtifact(
+                temporary_path=missing_source,
+                cleanup=lambda: None,
+            )
 
-            with self.assertRaises(ValueError):
-                storage.save(b"", OutputImagePath(output_path))
+            with self.assertRaises(FileNotFoundError):
+                storage.save(artifact, OutputImagePath(output_path))
 
     def test_save_keeps_existing_file_when_replace_fails(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
+            temp_source = Path(tmp_dir) / "work" / "generated.png"
+            temp_source.parent.mkdir(parents=True, exist_ok=True)
+            temp_source.write_bytes(b"new-image")
             output_path = Path(tmp_dir) / "result.png"
             output_path.write_bytes(b"old-image")
             storage = FileImageStorage()
+            cleanup = mock.Mock()
+            artifact = GeneratedImageArtifact(
+                temporary_path=temp_source,
+                cleanup=cleanup,
+            )
 
             with mock.patch(
                 "src.infrastructure.image_io.file_image_storage.os.replace",
                 side_effect=OSError("replace failed"),
             ):
                 with self.assertRaises(OSError):
-                    storage.save(b"new-image", OutputImagePath(output_path))
+                    storage.save(artifact, OutputImagePath(output_path))
 
             self.assertEqual(output_path.read_bytes(), b"old-image")
-            temp_files = list(output_path.parent.glob(f".{output_path.name}.*.tmp"))
-            self.assertEqual(temp_files, [])
+            cleanup.assert_called_once()
 
-    def test_save_does_not_call_fsync(self) -> None:
-        # technical-design.md の記述「保存時の fsync は使わず〜」に基づく実装であることの確認
-        # もし将来的に fsync を復活させる方針に変更される場合は、このテストも修正・削除する
+    def test_save_calls_cleanup_after_successful_promote(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
+            temp_source = Path(tmp_dir) / "work" / "generated.png"
+            temp_source.parent.mkdir(parents=True, exist_ok=True)
+            temp_source.write_bytes(b"encoded-image")
             output_path = Path(tmp_dir) / "result.png"
             storage = FileImageStorage()
+            cleanup = mock.Mock()
+            artifact = GeneratedImageArtifact(
+                temporary_path=temp_source,
+                cleanup=cleanup,
+            )
 
-            with mock.patch("src.infrastructure.image_io.file_image_storage.os.fsync") as fsync:
-                storage.save(b"encoded-image", OutputImagePath(output_path))
+            storage.save(artifact, OutputImagePath(output_path))
 
-            fsync.assert_not_called()
+            cleanup.assert_called_once()
 
 
 if __name__ == "__main__":
