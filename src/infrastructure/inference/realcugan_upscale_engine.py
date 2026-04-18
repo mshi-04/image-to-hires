@@ -85,6 +85,8 @@ class RealCuganUpscaleEngine(UpscaleEnginePort):
 
         with Image.open(image_path) as source_image:
             normalized_image = ImageOps.exif_transpose(source_image)
+            if job.scale_factor.value == 1:
+                return self._convert_without_upscale(normalized_image, job)
             if self._should_use_realcugan():
                 self.ensure_runtime_ready()
                 return self._upscale_with_realcugan(normalized_image, job)
@@ -252,6 +254,31 @@ class RealCuganUpscaleEngine(UpscaleEnginePort):
         try:
             self._encode_image_to_temporary_path(
                 image=upscaled_image,
+                temporary_path=encoded_output,
+                output_format=output_format,
+            )
+            return GeneratedImageArtifact(
+                temporary_path=encoded_output,
+                cleanup=self._build_cleanup([encoded_output]),
+            )
+        except Exception:
+            self._cleanup_files([encoded_output])
+            raise
+
+    def _convert_without_upscale(self, image: "Image.Image", job: UpscaleJob) -> GeneratedImageArtifact:
+        output_extension = Path(job.output_image.value).suffix.lower()
+        output_format = self._resolve_output_format(output_extension)
+
+        image_to_encode = image
+        if output_format == "JPEG":
+            image_to_encode = self._prepare_for_jpeg(image)
+
+        work_directory = self._ensure_work_directory(Path(job.output_image.value))
+        operation_id = uuid4().hex
+        encoded_output = work_directory / f"{operation_id}-encoded{output_extension}"
+        try:
+            self._encode_image_to_temporary_path(
+                image=image_to_encode,
                 temporary_path=encoded_output,
                 output_format=output_format,
             )

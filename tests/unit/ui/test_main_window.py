@@ -84,6 +84,9 @@ class TestMainWindow(unittest.TestCase):
         self.assertFalse(is_enabled)
         self.assertEqual(window.output_format_combo.currentText(), "入力と同じ")
         self.assertEqual(window.output_format_combo.currentData(), "keep_input")
+        self.assertEqual(window.scale_combo.currentData(), 1)
+        self.assertEqual(window.denoise_combo.currentData(), -1)
+        self.assertFalse(window.denoise_combo.isEnabled())
 
     def test_file_selection_updates_file_list_without_changing_output_format(self) -> None:
         # Arrange
@@ -111,6 +114,41 @@ class TestMainWindow(unittest.TestCase):
         self.assertEqual(window.output_format_combo.itemData(0), "keep_input")
         self.assertEqual(window.output_format_combo.itemText(1), "WebP（ロスレス）")
         self.assertEqual(window.output_format_combo.itemData(1), "webp_lossless")
+
+    def test_scale_combo_has_expected_options_with_one_x(self) -> None:
+        # Arrange
+        window = self.window
+
+        # Act / Assert
+        self.assertEqual(window.scale_combo.count(), 4)
+        self.assertEqual(window.scale_combo.itemText(0), "1x（等倍）")
+        self.assertEqual(window.scale_combo.itemData(0), 1)
+        self.assertEqual(window.scale_combo.itemText(1), "2x")
+        self.assertEqual(window.scale_combo.itemData(1), 2)
+        self.assertEqual(window.scale_combo.itemText(2), "3x")
+        self.assertEqual(window.scale_combo.itemData(2), 3)
+        self.assertEqual(window.scale_combo.itemText(3), "4x")
+        self.assertEqual(window.scale_combo.itemData(3), 4)
+
+    def test_denoise_is_locked_for_one_x_and_unlocked_for_other_scales(self) -> None:
+        # Arrange
+        self.window.scale_combo.setCurrentIndex(1)
+        self.window.denoise_combo.setCurrentIndex(self.window.denoise_combo.findData(2))
+
+        # Act
+        self.window.scale_combo.setCurrentIndex(0)
+        denoise_locked_value = self.window.denoise_combo.currentData()
+        denoise_locked_enabled = self.window.denoise_combo.isEnabled()
+
+        self.window.scale_combo.setCurrentIndex(1)
+        denoise_restored_value = self.window.denoise_combo.currentData()
+        denoise_restored_enabled = self.window.denoise_combo.isEnabled()
+
+        # Assert
+        self.assertEqual(denoise_locked_value, -1)
+        self.assertFalse(denoise_locked_enabled)
+        self.assertEqual(denoise_restored_value, 2)
+        self.assertTrue(denoise_restored_enabled)
 
     def test_start_button_disabled_while_running_and_enabled_after_finish(self) -> None:
         # Arrange

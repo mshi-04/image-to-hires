@@ -40,11 +40,13 @@ class MainWindow(QMainWindow):
         self._is_running = False
         self._worker_thread: QThread | None = None
         self._worker: UpscaleQueueWorker | None = None
+        self._denoise_index_before_1x: int | None = None
 
         self._batch_usecase = batch_usecase
 
         self._build_ui()
         self._bind_events()
+        self._sync_denoise_state_with_scale()
         self._update_file_display()
         self._update_start_button_state()
 
@@ -92,7 +94,7 @@ class MainWindow(QMainWindow):
         form_layout.addRow("デノイズ:", self.denoise_combo)
 
         self.scale_combo = self._build_combo_box(
-            values=[("2x", 2), ("3x", 3), ("4x", 4)]
+            values=[("1x（等倍）", 1), ("2x", 2), ("3x", 3), ("4x", 4)]
         )
         form_layout.addRow("拡大率:", self.scale_combo)
 
@@ -130,6 +132,7 @@ class MainWindow(QMainWindow):
     def _bind_events(self) -> None:
         self.select_button.clicked.connect(self._on_select_files_clicked)
         self.start_button.clicked.connect(self._on_start_clicked)
+        self.scale_combo.currentIndexChanged.connect(self._on_scale_changed)
 
     @Slot()
     def _on_select_files_clicked(self) -> None:
@@ -160,6 +163,10 @@ class MainWindow(QMainWindow):
             scale_factor=scale_factor,
             output_format_mode=output_format_mode_data,
         )
+
+    @Slot()
+    def _on_scale_changed(self) -> None:
+        self._sync_denoise_state_with_scale()
 
     def _start_worker(self, denoise_level: int, scale_factor: int, output_format_mode: str) -> None:
         # Guard against re-entry if the previous thread has not yet fully cleaned up.
@@ -268,6 +275,23 @@ class MainWindow(QMainWindow):
         self._update_file_display()
         self.result_label.setText("最終結果: 入力待機")
         self._update_start_button_state()
+
+    def _sync_denoise_state_with_scale(self) -> None:
+        scale_factor = int(self.scale_combo.currentData())
+        if scale_factor == 1:
+            current_denoise = self.denoise_combo.currentData()
+            if current_denoise != -1:
+                self._denoise_index_before_1x = self.denoise_combo.currentIndex()
+            denoise_none_index = self.denoise_combo.findData(-1)
+            if denoise_none_index >= 0:
+                self.denoise_combo.setCurrentIndex(denoise_none_index)
+            self.denoise_combo.setEnabled(False)
+            return
+
+        self.denoise_combo.setEnabled(True)
+        if self._denoise_index_before_1x is not None:
+            self.denoise_combo.setCurrentIndex(self._denoise_index_before_1x)
+            self._denoise_index_before_1x = None
 
     def closeEvent(self, event: QCloseEvent) -> None:
         if self._worker_thread is not None and self._worker_thread.isRunning():
