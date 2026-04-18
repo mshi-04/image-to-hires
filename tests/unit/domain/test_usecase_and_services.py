@@ -194,6 +194,31 @@ class TestDomainServicesAndUseCase(unittest.TestCase):
         self.assertEqual(fake_storage.calls, [Path("C:/images/custom-output.webp")])
         self.assertEqual(result.output_image_path.value, Path("C:/images/custom-output.webp"))
 
+    def test_run_upscale_usecase_normalizes_denoise_to_minus_one_for_scale_one(self) -> None:
+        # Arrange
+        fake_engine = FakeUpscaleEngine()
+        fake_storage = FakeImageStorage()
+        usecase = RunUpscaleUseCase(upscale_engine=fake_engine, image_storage=fake_storage)
+
+        # Act
+        result = usecase.execute(
+            RunUpscaleCommand(
+                input_image_path=Path("C:/images/input.jpg"),
+                output_image_path=Path("C:/images/output.jpg"),
+                scale_factor=1,
+                denoise_level=99,
+            )
+        )
+
+        # Assert
+        self.assertEqual(
+            fake_engine.calls,
+            [(Path("C:/images/input.jpg"), 1, -1, Path("C:/images/output.jpg"))],
+        )
+        self.assertEqual(fake_storage.calls, [Path("C:/images/output.jpg")])
+        self.assertEqual(result.scale_factor.value, 1)
+        self.assertEqual(result.denoise_level.value, -1)
+
     def test_run_upscale_batch_usecase_continues_when_one_item_fails(self) -> None:
         # Arrange
         input_paths = [
@@ -453,6 +478,40 @@ class TestDomainServicesAndUseCase(unittest.TestCase):
         self.assertEqual(result.failure_count, 1)
         self.assertFalse(result.items[0].is_success)
         self.assertIsInstance(result.items[0].error, UnsupportedImageFormatError)
+
+    def test_run_upscale_batch_usecase_scale_one_skips_runtime_check_and_normalizes_denoise(self) -> None:
+        # Arrange
+        fake_engine = FakeUpscaleEngine(runtime_error=RuntimeError("runtime missing"))
+        fake_storage = FakeImageStorage()
+        usecase = RunUpscaleBatchUseCase(upscale_engine=fake_engine, image_storage=fake_storage)
+
+        # Act
+        result = usecase.execute(
+            RunUpscaleBatchCommand(
+                input_image_paths=[Path("C:/images/one.png")],
+                scale_factor=1,
+                denoise_level=3,
+            )
+        )
+
+        # Assert
+        self.assertEqual(fake_engine.ready_calls, 0)
+        self.assertEqual(result.success_count, 1)
+        self.assertEqual(
+            fake_engine.calls,
+            [
+                (
+                    Path("C:/images/one.png"),
+                    1,
+                    -1,
+                    Path("C:/images/one-denoise-1x-up1x.png"),
+                )
+            ],
+        )
+        self.assertEqual(
+            [item.output_image_path for item in result.items],
+            [Path("C:/images/one-denoise-1x-up1x.png")],
+        )
 
 
 if __name__ == "__main__":

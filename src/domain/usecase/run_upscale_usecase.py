@@ -40,7 +40,7 @@ class RunUpscaleUseCase:
     def execute(self, command: RunUpscaleCommand) -> RunUpscaleResult:
         input_image = InputImagePath(Path(command.input_image_path))
         scale_factor = ScaleFactor(command.scale_factor)
-        denoise_level = DenoiseLevel(command.denoise_level)
+        denoise_level = self._normalize_denoise_level(command.denoise_level, scale_factor)
 
         if command.output_image_path:
             output_path = Path(command.output_image_path)
@@ -70,3 +70,9 @@ class RunUpscaleUseCase:
             scale_factor=job.scale_factor,
             denoise_level=job.denoise_level,
         )
+
+    @staticmethod
+    def _normalize_denoise_level(raw_denoise_level: int, scale_factor: ScaleFactor) -> DenoiseLevel:
+        if scale_factor.value == 1:
+            return DenoiseLevel(-1)
+        return DenoiseLevel(raw_denoise_level)

@@ -65,9 +65,10 @@ class RunUpscaleBatchUseCase:
         item_started_callback: Callable[[Path, int, int], None] | None = None,
         progress_callback: Callable[[UpscaleBatchItemResult, int, int], None] | None = None,
     ) -> RunUpscaleBatchResult:
-        self.ensure_runtime_ready()
         scale_factor = ScaleFactor(command.scale_factor)
-        denoise_level = DenoiseLevel(command.denoise_level)
+        denoise_level = self._normalize_denoise_level(command.denoise_level, scale_factor)
+        if scale_factor.value != 1:
+            self.ensure_runtime_ready()
         input_image_paths = list(command.input_image_paths)
         total_count = len(input_image_paths)
         output_image_paths = self._resolve_output_image_paths(command.output_image_paths, total_count)
@@ -153,3 +154,9 @@ class RunUpscaleBatchUseCase:
             )
 
         return resolved_paths
+
+    @staticmethod
+    def _normalize_denoise_level(raw_denoise_level: int, scale_factor: ScaleFactor) -> DenoiseLevel:
+        if scale_factor.value == 1:
+            return DenoiseLevel(-1)
+        return DenoiseLevel(raw_denoise_level)
