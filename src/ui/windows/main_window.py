@@ -20,14 +20,6 @@ from src.domain.usecase.run_upscale_batch_usecase import RunUpscaleBatchUseCase
 from src.ui.workers.upscale_queue_worker import UpscaleQueueWorker
 
 
-OUTPUT_FORMAT_MODE_KEEP_INPUT = "keep_input"
-OUTPUT_FORMAT_MODE_WEBP_LOSSLESS = "webp_lossless"
-OUTPUT_FORMAT_OPTIONS: list[tuple[str, str]] = [
-    ("入力と同じ", OUTPUT_FORMAT_MODE_KEEP_INPUT),
-    ("WebP（ロスレス）", OUTPUT_FORMAT_MODE_WEBP_LOSSLESS),
-]
-
-
 class MainWindow(QMainWindow):
     """Main application window for image upscaling."""
 
@@ -40,13 +32,11 @@ class MainWindow(QMainWindow):
         self._is_running = False
         self._worker_thread: QThread | None = None
         self._worker: UpscaleQueueWorker | None = None
-        self._denoise_index_before_1x: int | None = None
 
         self._batch_usecase = batch_usecase
 
         self._build_ui()
         self._bind_events()
-        self._sync_denoise_state_with_scale()
         self._update_file_display()
         self._update_start_button_state()
 
@@ -94,12 +84,9 @@ class MainWindow(QMainWindow):
         form_layout.addRow("デノイズ:", self.denoise_combo)
 
         self.scale_combo = self._build_combo_box(
-            values=[("1x（等倍）", 1), ("2x", 2), ("3x", 3), ("4x", 4)]
+            values=[("2x", 2), ("3x", 3), ("4x", 4)]
         )
         form_layout.addRow("拡大率:", self.scale_combo)
-
-        self.output_format_combo = self._build_combo_box(OUTPUT_FORMAT_OPTIONS)
-        form_layout.addRow("保存形式:", self.output_format_combo)
 
         root_layout.addLayout(form_layout)
 
@@ -132,7 +119,6 @@ class MainWindow(QMainWindow):
     def _bind_events(self) -> None:
         self.select_button.clicked.connect(self._on_select_files_clicked)
         self.start_button.clicked.connect(self._on_start_clicked)
-        self.scale_combo.currentIndexChanged.connect(self._on_scale_changed)
 
     @Slot()
     def _on_select_files_clicked(self) -> None:
@@ -154,21 +140,13 @@ class MainWindow(QMainWindow):
 
         denoise_level = int(self.denoise_combo.currentData())
         scale_factor = int(self.scale_combo.currentData())
-        output_format_mode_data = self.output_format_combo.currentData()
-        if not isinstance(output_format_mode_data, str):
-            raise RuntimeError("Output format selection is invalid.")
 
         self._start_worker(
             denoise_level=denoise_level,
             scale_factor=scale_factor,
-            output_format_mode=output_format_mode_data,
         )
 
-    @Slot()
-    def _on_scale_changed(self) -> None:
-        self._sync_denoise_state_with_scale()
-
-    def _start_worker(self, denoise_level: int, scale_factor: int, output_format_mode: str) -> None:
+    def _start_worker(self, denoise_level: int, scale_factor: int) -> None:
         # Guard against re-entry if the previous thread has not yet fully cleaned up.
         if self._worker_thread is not None:
             return
@@ -182,7 +160,6 @@ class MainWindow(QMainWindow):
             input_files=list(self._selected_files),
             denoise_level=denoise_level,
             scale_factor=scale_factor,
-            output_format_mode=output_format_mode,
         )
         thread = QThread(self)
         worker.moveToThread(thread)
@@ -275,23 +252,6 @@ class MainWindow(QMainWindow):
         self._update_file_display()
         self.result_label.setText("最終結果: 入力待機")
         self._update_start_button_state()
-
-    def _sync_denoise_state_with_scale(self) -> None:
-        scale_factor = int(self.scale_combo.currentData())
-        if scale_factor == 1:
-            current_denoise = self.denoise_combo.currentData()
-            if current_denoise != -1:
-                self._denoise_index_before_1x = self.denoise_combo.currentIndex()
-            denoise_none_index = self.denoise_combo.findData(-1)
-            if denoise_none_index >= 0:
-                self.denoise_combo.setCurrentIndex(denoise_none_index)
-            self.denoise_combo.setEnabled(False)
-            return
-
-        self.denoise_combo.setEnabled(True)
-        if self._denoise_index_before_1x is not None:
-            self.denoise_combo.setCurrentIndex(self._denoise_index_before_1x)
-            self._denoise_index_before_1x = None
 
     def closeEvent(self, event: QCloseEvent) -> None:
         if self._worker_thread is not None and self._worker_thread.isRunning():

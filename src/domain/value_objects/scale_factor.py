@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from src.domain.exceptions import UnsupportedScaleFactorError
 
 
-SUPPORTED_SCALE_FACTORS = frozenset({1, 2, 3, 4})
+SUPPORTED_SCALE_FACTORS = frozenset({2, 3, 4})
 
 
 @dataclass(frozen=True)

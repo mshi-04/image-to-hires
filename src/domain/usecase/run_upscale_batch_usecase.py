@@ -4,10 +4,10 @@ from pathlib import Path
 
 from src.domain.ports.image_storage_port import ImageStoragePort
 from src.domain.ports.upscale_engine_port import UpscaleEnginePort
-from src.domain.services.output_path_service import OutputFormatMode, build_default_output_path
+from src.domain.services.output_path_service import resolve_output_image_path
 from src.domain.usecase.run_upscale_usecase import RunUpscaleCommand, RunUpscaleUseCase
 from src.domain.value_objects.denoise_level import DenoiseLevel
-from src.domain.value_objects.image_path import InputImagePath, OutputImagePath
+from src.domain.value_objects.image_path import InputImagePath
 from src.domain.value_objects.scale_factor import ScaleFactor
 
 
@@ -18,9 +18,7 @@ class RunUpscaleBatchCommand:
     input_image_paths: Sequence[Path | str]
     scale_factor: int
     denoise_level: int
-    output_format_mode: str = "keep_input"
     output_image_paths: Sequence[Path | str | None] | None = None
-    output_format_mode: OutputFormatMode = "keep_input"
 
 
 @dataclass(frozen=True)
@@ -66,9 +64,8 @@ class RunUpscaleBatchUseCase:
         progress_callback: Callable[[UpscaleBatchItemResult, int, int], None] | None = None,
     ) -> RunUpscaleBatchResult:
         scale_factor = ScaleFactor(command.scale_factor)
-        denoise_level = self._normalize_denoise_level(command.denoise_level, scale_factor)
-        if scale_factor.value != 1:
-            self.ensure_runtime_ready()
+        denoise_level = DenoiseLevel(command.denoise_level)
+        self.ensure_runtime_ready()
         input_image_paths = list(command.input_image_paths)
         total_count = len(input_image_paths)
         output_image_paths = self._resolve_output_image_paths(command.output_image_paths, total_count)
@@ -86,18 +83,12 @@ class RunUpscaleBatchUseCase:
             try:
                 input_image = InputImagePath(current_input_path)
                 output_candidate = output_image_paths[index] if output_image_paths is not None else None
-                if output_candidate is not None:
-                    output_path = Path(output_candidate)
-                    if command.output_format_mode == "webp_lossless":
-                        output_path = output_path.with_suffix(".webp")
-                    output_image = OutputImagePath(output_path)
-                else:
-                    output_image = build_default_output_path(
-                        input_image,
-                        scale_factor,
-                        denoise_level,
-                        command.output_format_mode,
-                    )
+                output_image = resolve_output_image_path(
+                    input_image=input_image,
+                    scale_factor=scale_factor,
+                    denoise_level=denoise_level,
+                    output_image_path=output_candidate,
+                )
 
                 output_image_path = output_image.value
                 single_usecase.execute(
@@ -106,7 +97,6 @@ class RunUpscaleBatchUseCase:
                         output_image_path=output_image.value,
                         scale_factor=scale_factor.value,
                         denoise_level=denoise_level.value,
-                        output_format_mode=command.output_format_mode,
                     )
                 )
                 item_result = UpscaleBatchItemResult(
@@ -154,9 +144,3 @@ class RunUpscaleBatchUseCase:
             )
 
         return resolved_paths
-
-    @staticmethod
-    def _normalize_denoise_level(raw_denoise_level: int, scale_factor: ScaleFactor) -> DenoiseLevel:
-        if scale_factor.value == 1:
-            return DenoiseLevel(-1)
-        return DenoiseLevel(raw_denoise_level)
