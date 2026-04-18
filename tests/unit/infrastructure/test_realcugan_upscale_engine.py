@@ -125,6 +125,20 @@ class TestRealCuganUpscaleEngine(unittest.TestCase):
             self.assertEqual(work_directory.parent, expected_root)
             self.assertTrue(work_directory.is_dir())
 
+    def test_ensure_work_directory_re_resolves_when_output_parent_changes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            base_path = Path(tmp_dir)
+            engine = RealCuganUpscaleEngine(prefer_realcugan=False)
+            first_output = base_path / "outputs-a" / "result.png"
+            second_output = base_path / "outputs-b" / "result.png"
+
+            first_dir = engine._ensure_work_directory(first_output)
+            second_dir = engine._ensure_work_directory(second_output)
+
+            self.assertNotEqual(first_dir, second_dir)
+            self.assertEqual(second_dir.parent, second_output.parent.resolve(strict=False))
+            self.assertTrue(second_dir.is_dir())
+
     def test_ensure_runtime_ready_prefers_executable_parent_before_repo_root(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             tmp_path = Path(tmp_dir)
@@ -551,6 +565,20 @@ class TestRealCuganUpscaleEngine(unittest.TestCase):
             encode.assert_called_once()
             self.assertEqual(encode.call_args.kwargs["output_format"], "JPEG")
             self._assert_artifact_image(artifact, (4, 4), "JPEG")
+
+    def test_destructor_does_not_remove_returned_artifact_file(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            input_path = Path(tmp_dir) / "input.png"
+            output_path = Path(tmp_dir) / "output.png"
+            Image.new("RGB", (2, 2), color=(255, 0, 0)).save(input_path, format="PNG")
+            engine = RealCuganUpscaleEngine(prefer_realcugan=False)
+
+            artifact = engine.upscale(self._make_job(input_path, output_path, 2, 0))
+            try:
+                engine.__del__()
+                self.assertTrue(Path(artifact.temporary_path).exists())
+            finally:
+                artifact.cleanup()
 
 
 if __name__ == "__main__":

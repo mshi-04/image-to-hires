@@ -264,21 +264,27 @@ class RealCuganUpscaleEngine(UpscaleEnginePort):
             raise
 
     def _ensure_work_directory(self, output_path: Path | None = None) -> Path:
-        if self._work_directory is not None and self._work_directory.is_dir():
-            return self._work_directory
-
         if output_path is not None:
-            self._work_directory = (
+            desired_work_directory = (
                 output_path.parent / f".tmp-realcugan-{self._work_directory_id}"
             ).resolve(strict=False)
         else:
-            self._work_directory = (
+            desired_work_directory = (
                 self._get_current_working_directory()
                 / self._WORK_DIRECTORY_RELATIVE_PATH
                 / self._work_directory_id
             ).resolve(strict=False)
-        self._work_directory.mkdir(parents=True, exist_ok=True)
-        return self._work_directory
+
+        if (
+            self._work_directory is not None
+            and self._work_directory == desired_work_directory
+            and self._work_directory.is_dir()
+        ):
+            return self._work_directory
+
+        desired_work_directory.mkdir(parents=True, exist_ok=True)
+        self._work_directory = desired_work_directory
+        return desired_work_directory
 
     @staticmethod
     def _cleanup_files(files: list[Path]) -> None:
@@ -304,9 +310,7 @@ class RealCuganUpscaleEngine(UpscaleEnginePort):
         if self._work_directory is None:
             return
 
-        self._cleanup_files(
-            [work_file for work_file in self._work_directory.glob("*") if work_file.is_file()]
-        )
+        # 返却済み artifact の temporary_path は呼び出し側が所有するため削除しない。
         self._remove_empty_directory_if_exists(self._work_directory)
 
     @staticmethod
