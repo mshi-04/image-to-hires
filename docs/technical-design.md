@@ -71,8 +71,11 @@
 - GPU 都合で複数画像の並列生成は採用しない
 - 高速化は順次処理の範囲で行う
 - Real-CUGAN の `-j` を明示し、小画像は `4:4:4`、大画像は `2:2:2` を使う
-- Real-CUGAN 実行時の一時ファイルはジョブごとに作り直さず、作業ディレクトリを再利用する
-- 一時ファイルの格納先は `tmp/realcugan-work/` に固定し、`input.png` と `output.png` を使い回す
+- 2x / 3x / 4x では、入力が `.png` / `.jpg` / `.jpeg` / `.webp` かつ EXIF 回転補正不要かつ色モード変換不要なら、元ファイルをそのまま Real-CUGAN へ渡す
+- EXIF 回転補正や色モード変換が必要な場合だけ、Pillow で正規化した一時 PNG を Real-CUGAN へ渡す
+- Real-CUGAN 実行時の一時ファイルはジョブごとにランダム名を作らず、エンジン単位の作業ディレクトリ内で固定名を再利用する
+- 通常の実行では出力先フォルダ配下の `.tmp-realcugan-<engine-id>/` を使い、`input.png`、`realcugan.png`、`encoded.jpg` / `encoded.webp` / `encoded.png` を使い回す
+- 出力先が未確定の経路だけ `tmp/realcugan-work/<engine-id>/` を使う
 - 保存処理は原子保存を維持しつつ、不要な同期 I/O を減らしてオーバーヘッドを下げる
 - 保存時の `fsync` は使わず、停電や強制終了時の耐久性よりも順次処理全体のスループットを優先する
 - 出力形式モードは `keep_input` を既定とし、`webp_lossless` では保存先拡張子を `.webp` に統一し、WebP 保存は常に lossless とする
