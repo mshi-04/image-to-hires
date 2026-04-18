@@ -1,11 +1,12 @@
 import os
 import subprocess
 import sys
-from io import BytesIO
+from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING
 from uuid import uuid4
 
+from src.domain.entities.generated_image_artifact import GeneratedImageArtifact
 from src.domain.entities.upscale_job import UpscaleJob
 from src.domain.ports.upscale_engine_port import UpscaleEnginePort
 
@@ -18,14 +19,22 @@ class RealCuganUpscaleEngine(UpscaleEnginePort):
 
     _EXECUTABLE_RELATIVE_PATH = Path("bin") / "realcugan" / "realcugan-ncnn-vulkan.exe"
     _MODELS_RELATIVE_PATH = Path("models") / "realcugan" / "models-se"
+    _DIRECT_INPUT_EXTENSIONS = frozenset({".png", ".jpg", ".jpeg", ".webp"})
+    _DIRECT_INPUT_SAFE_MODES = frozenset({"RGB", "RGBA", "L", "LA"})
+    _EXIF_ORIENTATION_TAG = 274
     # 1024x1024ピクセルを境界として、小さい画像はスレッドを多く(4:4:4)、大きい画像は少なく(2:2:2)割り当てる
     # 大きい画像でスレッド数を増やすとVRAM消費が増大し、並行処理によるオーバーヘッドも大きくなるための経験則
     _THREAD_CONFIG_PIXEL_THRESHOLD = 1_048_576  # 1024x1024 pixels
     _SMALL_IMAGE_THREAD_CONFIG = "4:4:4"
     _LARGE_IMAGE_THREAD_CONFIG = "2:2:2"
-    _TEMP_INPUT_NAME = "input.png"
-    _TEMP_OUTPUT_NAME = "output.png"
     _WORK_DIRECTORY_RELATIVE_PATH = Path("tmp") / "realcugan-work"
+    _NORMALIZED_INPUT_FILE_NAME = "input.png"
+    _REALCUGAN_OUTPUT_FILE_NAME = "realcugan.png"
+    _ENCODED_OUTPUT_FILE_NAMES = {
+        "PNG": "encoded.png",
+        "JPEG": "encoded.jpg",
+        "WEBP": "encoded.webp",
+    }
 
     def __init__(
         self,
@@ -74,7 +83,7 @@ class RealCuganUpscaleEngine(UpscaleEnginePort):
         self._realcugan_models_dir = resolved_models_dir
         self._runtime_ready = True
 
-    def upscale(self, job: UpscaleJob) -> bytes:
+    def upscale(self, job: UpscaleJob) -> GeneratedImageArtifact:
         image_path = Path(job.input_image.value)
         if not image_path.exists():
             raise FileNotFoundError(f"Input image file was not found: {image_path}")
@@ -85,27 +94,30 @@ class RealCuganUpscaleEngine(UpscaleEnginePort):
             raise RuntimeError("Pillow is required to run RealCuganUpscaleEngine.") from exc
 
         with Image.open(image_path) as source_image:
-            normalized_image = ImageOps.exif_transpose(source_image)
+            if job.scale_factor.value == 1:
+                normalized_image = ImageOps.exif_transpose(source_image)
+                return self._convert_without_upscale(normalized_image, job)
             if self._should_use_realcugan():
                 self.ensure_runtime_ready()
-                upscaled_image = self._upscale_with_realcugan(normalized_image, job)
+                if self._can_use_direct_realcugan_input(source_image, image_path):
+                    realcugan_input_path = image_path
+                    realcugan_input_size = source_image.size
+                    prepared_input = None
+                else:
+                    normalized_image = ImageOps.exif_transpose(source_image)
+                    prepared_input = self._prepare_for_realcugan_png(normalized_image)
+                    realcugan_input_path = None
+                    realcugan_input_size = prepared_input.size
             else:
-                upscaled_image = self._upscale_with_pillow(normalized_image, job.scale_factor.value)
-            
-            output_format = self._resolve_output_format(Path(job.output_image.value).suffix.lower())
+                normalized_image = ImageOps.exif_transpose(source_image)
+                return self._upscale_with_pillow(normalized_image, job)
 
-            if output_format == "JPEG":
-                upscaled_image = self._prepare_for_jpeg(upscaled_image)
-
-            buffer = BytesIO()
-            save_options: dict[str, int | bool] = {}
-            if output_format == "JPEG":
-                save_options = {"quality": 100, "subsampling": 0}
-            elif output_format == "WEBP":
-                save_options = {"lossless": True, "quality": 100}
-            
-            upscaled_image.save(buffer, format=output_format, **save_options)
-            return buffer.getvalue()
+        return self._upscale_with_realcugan(
+            job=job,
+            realcugan_input_path=realcugan_input_path,
+            realcugan_input_size=realcugan_input_size,
+            prepared_input=prepared_input,
+        )
 
     def _should_use_realcugan(self) -> bool:
         # 将来 GPU 可用性チェック等の判定を加える拡張点として残す。
@@ -191,30 +203,47 @@ class RealCuganUpscaleEngine(UpscaleEnginePort):
     def _get_current_working_directory() -> Path:
         return Path.cwd().resolve(strict=False)
 
-    def _upscale_with_realcugan(self, image: "Image.Image", job: UpscaleJob) -> "Image.Image":
+    def _upscale_with_realcugan(
+        self,
+        job: UpscaleJob,
+        realcugan_input_path: Path | None,
+        realcugan_input_size: tuple[int, int],
+        prepared_input: "Image.Image | None" = None,
+    ) -> GeneratedImageArtifact:
         from PIL import Image
 
         if self._realcugan_executable is None or self._realcugan_models_dir is None:
             raise RuntimeError("Real-CUGAN runtime paths are unresolved.")
 
-        work_directory = self._ensure_work_directory()
-        input_png = work_directory / self._TEMP_INPUT_NAME
-        output_png = work_directory / self._TEMP_OUTPUT_NAME
-        # 前回のジョブが異常終了などで残したファイルを念のためクリーンアップする
-        self._cleanup_work_files(input_png, output_png)
+        work_directory = self._ensure_work_directory(Path(job.output_image.value))
+        input_png = work_directory / self._NORMALIZED_INPUT_FILE_NAME
+        realcugan_output_png = work_directory / self._REALCUGAN_OUTPUT_FILE_NAME
+        output_extension = Path(job.output_image.value).suffix.lower()
+        output_format = self._resolve_output_format(output_extension)
+        encoded_output = self._build_encoded_output_path(work_directory, output_format)
+        cleanup_targets = [realcugan_output_png]
+
         try:
-            prepared_input = self._prepare_for_realcugan_png(image)
-            prepared_input.save(input_png, format="PNG")
+            self._cleanup_files([realcugan_output_png, encoded_output])
+            if prepared_input is not None:
+                self._cleanup_files([input_png])
+                prepared_input.save(input_png, format="PNG")
+                cleanup_targets.insert(0, input_png)
+                command_input_path = input_png
+            elif realcugan_input_path is not None:
+                command_input_path = realcugan_input_path
+            else:
+                raise RuntimeError("Real-CUGAN input path is unresolved.")
 
             command = [
                 str(self._realcugan_executable),
-                "-i", str(input_png),
-                "-o", str(output_png),
+                "-i", str(command_input_path),
+                "-o", str(realcugan_output_png),
                 "-s", str(job.scale_factor.value),
                 "-n", str(job.denoise_level.value),
                 "-m", str(self._realcugan_models_dir),
                 "-t", "0",  # タイルサイズを自動決定させる
-                "-j", self._resolve_thread_config(prepared_input),
+                "-j", self._resolve_thread_config(realcugan_input_size),
                 "-f", "png",
                 # "-x",  # TTAを有効にすると処理時間が数倍に延びるためMVPでは無効化する
             ]
@@ -224,36 +253,123 @@ class RealCuganUpscaleEngine(UpscaleEnginePort):
                 stdout = (run_result.stdout or "").strip()
                 details = stderr or stdout or "No stderr/stdout output."
                 raise RuntimeError(f"Real-CUGAN execution failed: {details}")
-            if not output_png.exists():
+            if not realcugan_output_png.exists():
                 raise RuntimeError("Real-CUGAN finished without producing output image.")
 
-            with Image.open(output_png) as result_image:
-                return result_image.copy()
-        finally:
-            self._cleanup_work_files(input_png, output_png)
+            # keep_input + PNG の場合は Real-CUGAN 出力PNGをそのまま昇格する。
+            if output_format == "PNG":
+                return GeneratedImageArtifact(
+                    temporary_path=realcugan_output_png,
+                    cleanup=self._build_cleanup(cleanup_targets),
+                )
 
-    def _ensure_work_directory(self) -> Path:
-        if self._work_directory is not None and self._work_directory.is_dir():
+            with Image.open(realcugan_output_png) as result_image:
+                image_to_encode = result_image
+                if output_format == "JPEG":
+                    image_to_encode = self._prepare_for_jpeg(result_image)
+                self._encode_image_to_temporary_path(
+                    image=image_to_encode,
+                    temporary_path=encoded_output,
+                    output_format=output_format,
+                )
+
+            return GeneratedImageArtifact(
+                temporary_path=encoded_output,
+                cleanup=self._build_cleanup([*cleanup_targets, encoded_output]),
+            )
+        except Exception:
+            self._cleanup_files([input_png, realcugan_output_png, encoded_output])
+            raise
+
+    def _upscale_with_pillow(self, image: "Image.Image", job: UpscaleJob) -> GeneratedImageArtifact:
+        output_extension = Path(job.output_image.value).suffix.lower()
+        output_format = self._resolve_output_format(output_extension)
+        upscaled_image = self._resize_with_pillow(image, job.scale_factor.value)
+
+        if output_format == "JPEG":
+            upscaled_image = self._prepare_for_jpeg(upscaled_image)
+
+        work_directory = self._ensure_work_directory(Path(job.output_image.value))
+        encoded_output = self._build_encoded_output_path(work_directory, output_format)
+        try:
+            self._cleanup_files([encoded_output])
+            self._encode_image_to_temporary_path(
+                image=upscaled_image,
+                temporary_path=encoded_output,
+                output_format=output_format,
+            )
+            return GeneratedImageArtifact(
+                temporary_path=encoded_output,
+                cleanup=self._build_cleanup([encoded_output]),
+            )
+        except Exception:
+            self._cleanup_files([encoded_output])
+            raise
+
+    def _convert_without_upscale(self, image: "Image.Image", job: UpscaleJob) -> GeneratedImageArtifact:
+        output_extension = Path(job.output_image.value).suffix.lower()
+        output_format = self._resolve_output_format(output_extension)
+
+        image_to_encode = image
+        if output_format == "JPEG":
+            image_to_encode = self._prepare_for_jpeg(image)
+
+        work_directory = self._ensure_work_directory(Path(job.output_image.value))
+        encoded_output = self._build_encoded_output_path(work_directory, output_format)
+        try:
+            self._cleanup_files([encoded_output])
+            self._encode_image_to_temporary_path(
+                image=image_to_encode,
+                temporary_path=encoded_output,
+                output_format=output_format,
+            )
+            return GeneratedImageArtifact(
+                temporary_path=encoded_output,
+                cleanup=self._build_cleanup([encoded_output]),
+            )
+        except Exception:
+            self._cleanup_files([encoded_output])
+            raise
+
+    def _ensure_work_directory(self, output_path: Path | None = None) -> Path:
+        if output_path is not None:
+            desired_work_directory = (
+                output_path.parent / f".tmp-realcugan-{self._work_directory_id}"
+            ).resolve(strict=False)
+        else:
+            desired_work_directory = (
+                self._get_current_working_directory()
+                / self._WORK_DIRECTORY_RELATIVE_PATH
+                / self._work_directory_id
+            ).resolve(strict=False)
+
+        if (
+            self._work_directory is not None
+            and self._work_directory == desired_work_directory
+            and self._work_directory.is_dir()
+        ):
             return self._work_directory
 
-        self._work_directory = (
-            self._get_current_working_directory()
-            / self._WORK_DIRECTORY_RELATIVE_PATH
-            / self._work_directory_id
-        ).resolve(strict=False)
-        self._work_directory.mkdir(parents=True, exist_ok=True)
-        return self._work_directory
-
-    def _cleanup_work_files(self, input_png: Path, output_png: Path) -> None:
-        self._remove_file_if_exists(input_png)
-        self._remove_file_if_exists(output_png)
+        desired_work_directory.mkdir(parents=True, exist_ok=True)
+        self._work_directory = desired_work_directory
+        return desired_work_directory
 
     @staticmethod
-    def _remove_file_if_exists(file_path: Path) -> None:
-        file_path.unlink(missing_ok=True)
+    def _cleanup_files(files: list[Path]) -> None:
+        for file_path in files:
+            file_path.unlink(missing_ok=True)
 
-    def _resolve_thread_config(self, image: "Image.Image") -> str:
-        pixel_count = image.width * image.height
+    @classmethod
+    def _build_cleanup(cls, files: list[Path]) -> Callable[[], None]:
+        targets = tuple(files)
+
+        def cleanup() -> None:
+            cls._cleanup_files(list(targets))
+
+        return cleanup
+
+    def _resolve_thread_config(self, image_size: tuple[int, int]) -> str:
+        pixel_count = image_size[0] * image_size[1]
         if pixel_count <= self._THREAD_CONFIG_PIXEL_THRESHOLD:
             return self._SMALL_IMAGE_THREAD_CONFIG
         return self._LARGE_IMAGE_THREAD_CONFIG
@@ -261,10 +377,8 @@ class RealCuganUpscaleEngine(UpscaleEnginePort):
     def __del__(self) -> None:
         if self._work_directory is None:
             return
-        self._cleanup_work_files(
-            self._work_directory / self._TEMP_INPUT_NAME,
-            self._work_directory / self._TEMP_OUTPUT_NAME,
-        )
+
+        # 返却済み artifact の temporary_path は呼び出し側が所有するため削除しない。
         self._remove_empty_directory_if_exists(self._work_directory)
 
     @staticmethod
@@ -288,6 +402,34 @@ class RealCuganUpscaleEngine(UpscaleEnginePort):
         # Real-CUGAN に渡す一時 PNG へ保存できないモード (例: CMYK) は RGB へ正規化する。
         return image.convert("RGB")
 
+    @classmethod
+    def _can_use_direct_realcugan_input(cls, image: "Image.Image", image_path: Path) -> bool:
+        if image_path.suffix.lower() not in cls._DIRECT_INPUT_EXTENSIONS:
+            return False
+        if cls._requires_exif_transpose(image):
+            return False
+        if cls._requires_realcugan_png_normalization(image):
+            return False
+        return True
+
+    @classmethod
+    def _requires_exif_transpose(cls, image: "Image.Image") -> bool:
+        try:
+            exif = image.getexif()
+        except Exception:  # noqa: BLE001
+            return True
+
+        orientation = exif.get(cls._EXIF_ORIENTATION_TAG, 1)
+        return orientation not in (None, 1)
+
+    @classmethod
+    def _requires_realcugan_png_normalization(cls, image: "Image.Image") -> bool:
+        return image.mode not in cls._DIRECT_INPUT_SAFE_MODES
+
+    @classmethod
+    def _build_encoded_output_path(cls, work_directory: Path, output_format: str) -> Path:
+        return work_directory / cls._ENCODED_OUTPUT_FILE_NAMES[output_format]
+
     @staticmethod
     def _run_realcugan(command: list[str]) -> subprocess.CompletedProcess[str]:
         creation_flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
@@ -304,13 +446,27 @@ class RealCuganUpscaleEngine(UpscaleEnginePort):
             raise RuntimeError("Real-CUGAN execution timed out after 1800 seconds.") from exc
 
     @staticmethod
-    def _upscale_with_pillow(image: "Image.Image", scale_factor: int) -> "Image.Image":
+    def _resize_with_pillow(image: "Image.Image", scale_factor: int) -> "Image.Image":
         # Pillow の可用性は upscale() 冒頭で保証済みのためここでは再チェックしない。
         from PIL import Image
 
         output_width = image.width * scale_factor
         output_height = image.height * scale_factor
         return image.resize((output_width, output_height), Image.Resampling.LANCZOS)
+
+    @staticmethod
+    def _encode_image_to_temporary_path(
+        image: "Image.Image",
+        temporary_path: Path,
+        output_format: str,
+    ) -> None:
+        save_options: dict[str, int | bool] = {}
+        if output_format == "JPEG":
+            save_options = {"quality": 100, "subsampling": 0}
+        elif output_format == "WEBP":
+            save_options = {"lossless": True, "quality": 100}
+
+        image.save(temporary_path, format=output_format, **save_options)
 
     @staticmethod
     def _resolve_output_format(extension: str) -> str:

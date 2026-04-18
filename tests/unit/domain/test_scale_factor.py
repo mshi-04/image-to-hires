@@ -6,7 +6,7 @@ from src.domain.value_objects.scale_factor import ScaleFactor
 
 class TestScaleFactor(unittest.TestCase):
     def test_scale_factor_accepts_supported_values(self) -> None:
-        for value in [2, 3, 4]:
+        for value in [1, 2, 3, 4]:
             with self.subTest(value=value):
                 self.assertEqual(ScaleFactor(value).value, value)
 

@@ -1,6 +1,7 @@
 import unittest
 from pathlib import Path
 
+from src.domain.entities.generated_image_artifact import GeneratedImageArtifact
 from src.domain.entities.upscale_job import UpscaleJob
 from src.domain.ports.image_storage_port import ImageStoragePort
 from src.domain.ports.upscale_engine_port import UpscaleEnginePort
@@ -35,7 +36,7 @@ class FakeUpscaleEngine(UpscaleEnginePort):
         if self.runtime_error is not None:
             raise self.runtime_error
 
-    def upscale(self, job: UpscaleJob) -> bytes:
+    def upscale(self, job: UpscaleJob) -> GeneratedImageArtifact:
         self.calls.append(
             (
                 job.input_image.value,
@@ -46,15 +47,21 @@ class FakeUpscaleEngine(UpscaleEnginePort):
         )
         if job.input_image.value in self.fail_input_paths:
             raise RuntimeError("failed to upscale")
-        return b"upscaled-image"
+        artifact_path = job.output_image.value.with_name(
+            f"{job.output_image.value.stem}.generated{job.output_image.value.suffix}"
+        )
+        return GeneratedImageArtifact(
+            temporary_path=artifact_path,
+            cleanup=lambda: None,
+        )
 
 
 class FakeImageStorage(ImageStoragePort):
     def __init__(self) -> None:
-        self.calls: list[tuple[bytes, Path]] = []
+        self.calls: list[Path] = []
 
-    def save(self, image_bytes: bytes, output_image: OutputImagePath) -> None:
-        self.calls.append((image_bytes, output_image.value))
+    def save(self, artifact: GeneratedImageArtifact, output_image: OutputImagePath) -> None:  # noqa: ARG002
+        self.calls.append(output_image.value)
 
 
 class TestDomainServicesAndUseCase(unittest.TestCase):
@@ -133,7 +140,7 @@ class TestDomainServicesAndUseCase(unittest.TestCase):
             [(Path("C:/images/input.png"), 2, 1, Path("C:/images/output.png"))],
         )
         self.assertEqual(fake_engine.ready_calls, 0)
-        self.assertEqual(fake_storage.calls, [(b"upscaled-image", Path("C:/images/output.png"))])
+        self.assertEqual(fake_storage.calls, [Path("C:/images/output.png")])
         self.assertEqual(result.scale_factor.value, 2)
         self.assertEqual(result.denoise_level.value, 1)
         self.assertEqual(result.output_image_path.value, Path("C:/images/output.png"))
@@ -159,10 +166,7 @@ class TestDomainServicesAndUseCase(unittest.TestCase):
             fake_engine.calls,
             [(Path("C:/images/input.jpg"), 3, 0, Path("C:/images/input-denoise0x-up3x.webp"))],
         )
-        self.assertEqual(
-            fake_storage.calls,
-            [(b"upscaled-image", Path("C:/images/input-denoise0x-up3x.webp"))],
-        )
+        self.assertEqual(fake_storage.calls, [Path("C:/images/input-denoise0x-up3x.webp")])
         self.assertEqual(result.output_image_path.value, Path("C:/images/input-denoise0x-up3x.webp"))
 
     def test_run_upscale_usecase_forces_explicit_output_to_webp_when_mode_is_webp_lossless(self) -> None:
@@ -187,11 +191,33 @@ class TestDomainServicesAndUseCase(unittest.TestCase):
             fake_engine.calls,
             [(Path("C:/images/input.jpg"), 2, 0, Path("C:/images/custom-output.webp"))],
         )
-        self.assertEqual(
-            fake_storage.calls,
-            [(b"upscaled-image", Path("C:/images/custom-output.webp"))],
-        )
+        self.assertEqual(fake_storage.calls, [Path("C:/images/custom-output.webp")])
         self.assertEqual(result.output_image_path.value, Path("C:/images/custom-output.webp"))
+
+    def test_run_upscale_usecase_normalizes_denoise_to_minus_one_for_scale_one(self) -> None:
+        # Arrange
+        fake_engine = FakeUpscaleEngine()
+        fake_storage = FakeImageStorage()
+        usecase = RunUpscaleUseCase(upscale_engine=fake_engine, image_storage=fake_storage)
+
+        # Act
+        result = usecase.execute(
+            RunUpscaleCommand(
+                input_image_path=Path("C:/images/input.jpg"),
+                output_image_path=Path("C:/images/output.jpg"),
+                scale_factor=1,
+                denoise_level=99,
+            )
+        )
+
+        # Assert
+        self.assertEqual(
+            fake_engine.calls,
+            [(Path("C:/images/input.jpg"), 1, -1, Path("C:/images/output.jpg"))],
+        )
+        self.assertEqual(fake_storage.calls, [Path("C:/images/output.jpg")])
+        self.assertEqual(result.scale_factor.value, 1)
+        self.assertEqual(result.denoise_level.value, -1)
 
     def test_run_upscale_batch_usecase_continues_when_one_item_fails(self) -> None:
         # Arrange
@@ -277,8 +303,8 @@ class TestDomainServicesAndUseCase(unittest.TestCase):
         self.assertEqual(
             fake_storage.calls,
             [
-                (b"upscaled-image", Path("C:/images/ok-denoise3x-up2x.png")),
-                (b"upscaled-image", Path("C:/images/ok2-denoise3x-up2x.webp")),
+                Path("C:/images/ok-denoise3x-up2x.png"),
+                Path("C:/images/ok2-denoise3x-up2x.webp"),
             ],
         )
         self.assertEqual(
@@ -359,8 +385,8 @@ class TestDomainServicesAndUseCase(unittest.TestCase):
         self.assertEqual(
             fake_storage.calls,
             [
-                (b"upscaled-image", Path("C:/images/ok-denoise3x-up2x.webp")),
-                (b"upscaled-image", Path("C:/images/ok2-denoise3x-up2x.webp")),
+                Path("C:/images/ok-denoise3x-up2x.webp"),
+                Path("C:/images/ok2-denoise3x-up2x.webp"),
             ],
         )
 
@@ -452,6 +478,40 @@ class TestDomainServicesAndUseCase(unittest.TestCase):
         self.assertEqual(result.failure_count, 1)
         self.assertFalse(result.items[0].is_success)
         self.assertIsInstance(result.items[0].error, UnsupportedImageFormatError)
+
+    def test_run_upscale_batch_usecase_scale_one_skips_runtime_check_and_normalizes_denoise(self) -> None:
+        # Arrange
+        fake_engine = FakeUpscaleEngine(runtime_error=RuntimeError("runtime missing"))
+        fake_storage = FakeImageStorage()
+        usecase = RunUpscaleBatchUseCase(upscale_engine=fake_engine, image_storage=fake_storage)
+
+        # Act
+        result = usecase.execute(
+            RunUpscaleBatchCommand(
+                input_image_paths=[Path("C:/images/one.png")],
+                scale_factor=1,
+                denoise_level=3,
+            )
+        )
+
+        # Assert
+        self.assertEqual(fake_engine.ready_calls, 0)
+        self.assertEqual(result.success_count, 1)
+        self.assertEqual(
+            fake_engine.calls,
+            [
+                (
+                    Path("C:/images/one.png"),
+                    1,
+                    -1,
+                    Path("C:/images/one-denoise-1x-up1x.png"),
+                )
+            ],
+        )
+        self.assertEqual(
+            [item.output_image_path for item in result.items],
+            [Path("C:/images/one-denoise-1x-up1x.png")],
+        )
 
 
 if __name__ == "__main__":
