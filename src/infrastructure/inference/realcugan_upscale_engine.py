@@ -182,14 +182,13 @@ class RealCuganUpscaleEngine(UpscaleEnginePort):
         if self._realcugan_executable is None or self._realcugan_models_dir is None:
             raise RuntimeError("Real-CUGAN runtime paths are unresolved.")
 
-        work_directory = self._ensure_work_directory()
+        work_directory = self._ensure_work_directory(Path(job.output_image.value))
         operation_id = uuid4().hex
         input_png = work_directory / f"{operation_id}-input.png"
         realcugan_output_png = work_directory / f"{operation_id}-realcugan.png"
         output_extension = Path(job.output_image.value).suffix.lower()
         output_format = self._resolve_output_format(output_extension)
         encoded_output = work_directory / f"{operation_id}-encoded{output_extension}"
-        self._cleanup_files([input_png, realcugan_output_png, encoded_output])
 
         try:
             prepared_input = self._prepare_for_realcugan_png(image)
@@ -249,10 +248,9 @@ class RealCuganUpscaleEngine(UpscaleEnginePort):
         if output_format == "JPEG":
             upscaled_image = self._prepare_for_jpeg(upscaled_image)
 
-        work_directory = self._ensure_work_directory()
+        work_directory = self._ensure_work_directory(Path(job.output_image.value))
         operation_id = uuid4().hex
         encoded_output = work_directory / f"{operation_id}-encoded{output_extension}"
-        self._cleanup_files([encoded_output])
         try:
             self._encode_image_to_temporary_path(
                 image=upscaled_image,
@@ -275,10 +273,9 @@ class RealCuganUpscaleEngine(UpscaleEnginePort):
         if output_format == "JPEG":
             image_to_encode = self._prepare_for_jpeg(image)
 
-        work_directory = self._ensure_work_directory()
+        work_directory = self._ensure_work_directory(Path(job.output_image.value))
         operation_id = uuid4().hex
         encoded_output = work_directory / f"{operation_id}-encoded{output_extension}"
-        self._cleanup_files([encoded_output])
         try:
             self._encode_image_to_temporary_path(
                 image=image_to_encode,
@@ -293,17 +290,28 @@ class RealCuganUpscaleEngine(UpscaleEnginePort):
             self._cleanup_files([encoded_output])
             raise
 
-    def _ensure_work_directory(self) -> Path:
-        if self._work_directory is not None and self._work_directory.is_dir():
+    def _ensure_work_directory(self, output_path: Path | None = None) -> Path:
+        if output_path is not None:
+            desired_work_directory = (
+                output_path.parent / f".tmp-realcugan-{self._work_directory_id}"
+            ).resolve(strict=False)
+        else:
+            desired_work_directory = (
+                self._get_current_working_directory()
+                / self._WORK_DIRECTORY_RELATIVE_PATH
+                / self._work_directory_id
+            ).resolve(strict=False)
+
+        if (
+            self._work_directory is not None
+            and self._work_directory == desired_work_directory
+            and self._work_directory.is_dir()
+        ):
             return self._work_directory
 
-        self._work_directory = (
-            self._get_current_working_directory()
-            / self._WORK_DIRECTORY_RELATIVE_PATH
-            / self._work_directory_id
-        ).resolve(strict=False)
-        self._work_directory.mkdir(parents=True, exist_ok=True)
-        return self._work_directory
+        desired_work_directory.mkdir(parents=True, exist_ok=True)
+        self._work_directory = desired_work_directory
+        return desired_work_directory
 
     @staticmethod
     def _cleanup_files(files: list[Path]) -> None:
@@ -319,10 +327,6 @@ class RealCuganUpscaleEngine(UpscaleEnginePort):
 
         return cleanup
 
-    @staticmethod
-    def _remove_file_if_exists(file_path: Path) -> None:
-        file_path.unlink(missing_ok=True)
-
     def _resolve_thread_config(self, image: "Image.Image") -> str:
         pixel_count = image.width * image.height
         if pixel_count <= self._THREAD_CONFIG_PIXEL_THRESHOLD:
@@ -333,9 +337,7 @@ class RealCuganUpscaleEngine(UpscaleEnginePort):
         if self._work_directory is None:
             return
 
-        for work_file in self._work_directory.glob("*"):
-            if work_file.is_file():
-                self._remove_file_if_exists(work_file)
+        # 返却済み artifact の temporary_path は呼び出し側が所有するため削除しない。
         self._remove_empty_directory_if_exists(self._work_directory)
 
     @staticmethod

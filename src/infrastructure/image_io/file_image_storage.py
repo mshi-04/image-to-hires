@@ -10,13 +10,13 @@ class FileImageStorage(ImageStoragePort):
     """Promote generated image artifacts to final files on local storage."""
 
     def save(self, artifact: GeneratedImageArtifact, output_image: OutputImagePath) -> None:
-        temporary_path = Path(artifact.temporary_path)
-        if not temporary_path.exists():
-            raise FileNotFoundError(f"Generated temporary file was not found: {temporary_path}")
-
-        output_path = Path(output_image.value)
-        output_path.parent.mkdir(parents=True, exist_ok=True)
         try:
+            temporary_path = Path(artifact.temporary_path)
+            if not temporary_path.exists():
+                raise FileNotFoundError(f"Generated temporary file was not found: {temporary_path}")
+
+            output_path = Path(output_image.value)
+            output_path.parent.mkdir(parents=True, exist_ok=True)
             os.replace(temporary_path, output_path)
         finally:
             artifact.cleanup()
