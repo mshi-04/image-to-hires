@@ -4,7 +4,7 @@ from pathlib import Path
 from src.domain.entities.upscale_job import UpscaleJob
 from src.domain.ports.image_storage_port import ImageStoragePort
 from src.domain.ports.upscale_engine_port import UpscaleEnginePort
-from src.domain.services.output_path_service import build_default_output_path
+from src.domain.services.output_path_service import OutputFormatMode, build_default_output_path
 from src.domain.value_objects.denoise_level import DenoiseLevel
 from src.domain.value_objects.image_path import InputImagePath, OutputImagePath
 from src.domain.value_objects.scale_factor import ScaleFactor
@@ -18,6 +18,7 @@ class RunUpscaleCommand:
     scale_factor: int
     denoise_level: int
     output_image_path: Path | str | None = None
+    output_format_mode: OutputFormatMode = "keep_input"
 
 
 @dataclass(frozen=True)
@@ -44,7 +45,12 @@ class RunUpscaleUseCase:
         if command.output_image_path:
             output_image = OutputImagePath(Path(command.output_image_path))
         else:
-            output_image = build_default_output_path(input_image, scale_factor, denoise_level)
+            output_image = build_default_output_path(
+                input_image,
+                scale_factor,
+                denoise_level,
+                command.output_format_mode,
+            )
 
         job = UpscaleJob(
             input_image=input_image,
