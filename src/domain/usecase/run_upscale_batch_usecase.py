@@ -18,6 +18,7 @@ class RunUpscaleBatchCommand:
     input_image_paths: Sequence[Path | str]
     scale_factor: int
     denoise_level: int
+    output_format_mode: str = "keep_input"
     output_image_paths: Sequence[Path | str | None] | None = None
     output_format_mode: OutputFormatMode = "keep_input"
 

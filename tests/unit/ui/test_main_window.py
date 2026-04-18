@@ -12,6 +12,7 @@ try:
     from src.domain.value_objects.denoise_level import DenoiseLevel
     from src.domain.value_objects.scale_factor import ScaleFactor
     from src.ui.windows.main_window import MainWindow
+    from src.ui.workers.upscale_queue_worker import UpscaleQueueWorker
 
     PYSIDE_AVAILABLE = True
 except ModuleNotFoundError:
@@ -24,6 +25,7 @@ class FakeBatchUseCase:
     def __init__(self, runtime_error: Exception | None = None) -> None:
         self.runtime_error = runtime_error
         self.ready_calls = 0
+        self.last_command = None
 
     def ensure_runtime_ready(self) -> None:
         self.ready_calls += 1
@@ -32,6 +34,7 @@ class FakeBatchUseCase:
 
     def execute(self, command, item_started_callback=None, progress_callback=None):  # noqa: ANN001
         self.ensure_runtime_ready()
+        self.last_command = command
         paths = [Path(p) for p in command.input_image_paths]
         scale = ScaleFactor(command.scale_factor)
         denoise = DenoiseLevel(command.denoise_level)
@@ -79,12 +82,14 @@ class TestMainWindow(unittest.TestCase):
 
         # Assert
         self.assertFalse(is_enabled)
-        self.assertEqual(window.output_format_display.text(), "未選択")
+        self.assertEqual(window.output_format_combo.currentText(), "入力と同じ")
+        self.assertEqual(window.output_format_combo.currentData(), "keep_input")
 
-    def test_file_selection_updates_file_list_and_format(self) -> None:
+    def test_file_selection_updates_file_list_without_changing_output_format(self) -> None:
         # Arrange
         base = Path.cwd() / "images"
         selected = [str(base / "a.png"), str(base / "b.png")]
+        self.window.output_format_combo.setCurrentIndex(1)
 
         # Act
         with patch("src.ui.windows.main_window.QFileDialog.getOpenFileNames", return_value=(selected, "")):
@@ -92,20 +97,20 @@ class TestMainWindow(unittest.TestCase):
 
         # Assert
         self.assertEqual(self.window.file_list_textbox.toPlainText(), "a.png\nb.png")
-        self.assertEqual(self.window.output_format_display.text(), ".png")
+        self.assertEqual(self.window.output_format_combo.currentText(), "WebP（ロスレス）")
+        self.assertEqual(self.window.output_format_combo.currentData(), "webp_lossless")
         self.assertTrue(self.window.start_button.isEnabled())
 
-    def test_file_selection_with_mixed_extensions_shows_mixed_label(self) -> None:
+    def test_output_format_combo_has_expected_options(self) -> None:
         # Arrange
-        base = Path.cwd() / "images"
-        selected = [str(base / "a.png"), str(base / "b.jpg"), str(base / "c.webp")]
+        window = self.window
 
-        # Act
-        with patch("src.ui.windows.main_window.QFileDialog.getOpenFileNames", return_value=(selected, "")):
-            self.window._on_select_files_clicked()
-
-        # Assert
-        self.assertEqual(self.window.output_format_display.text(), "入力と同じ (.jpg, .png, .webp)")
+        # Act / Assert
+        self.assertEqual(window.output_format_combo.count(), 2)
+        self.assertEqual(window.output_format_combo.itemText(0), "入力と同じ")
+        self.assertEqual(window.output_format_combo.itemData(0), "keep_input")
+        self.assertEqual(window.output_format_combo.itemText(1), "WebP（ロスレス）")
+        self.assertEqual(window.output_format_combo.itemData(1), "webp_lossless")
 
     def test_start_button_disabled_while_running_and_enabled_after_finish(self) -> None:
         # Arrange
@@ -146,6 +151,24 @@ class TestMainWindow(unittest.TestCase):
         self.assertFalse(select_before_cleanup)
         self.assertTrue(state_after_cleanup)
         self.assertTrue(select_after_cleanup)
+
+    def test_worker_passes_selected_output_format_mode_to_command(self) -> None:
+        # Arrange
+        fake_usecase = FakeBatchUseCase()
+        worker = UpscaleQueueWorker(
+            batch_usecase=fake_usecase,
+            input_files=[Path.cwd() / "images" / "a.png"],
+            denoise_level=1,
+            scale_factor=2,
+            output_format_mode="webp_lossless",
+        )
+
+        # Act
+        worker.run()
+
+        # Assert
+        self.assertIsNotNone(fake_usecase.last_command)
+        self.assertEqual(fake_usecase.last_command.output_format_mode, "webp_lossless")
 
     def test_start_worker_does_not_check_runtime_before_thread_start(self) -> None:
         # Arrange

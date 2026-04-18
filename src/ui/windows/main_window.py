@@ -8,7 +8,6 @@ from PySide6.QtWidgets import (
     QFormLayout,
     QHBoxLayout,
     QLabel,
-    QLineEdit,
     QMainWindow,
     QMessageBox,
     QPushButton,
@@ -19,6 +18,14 @@ from PySide6.QtWidgets import (
 
 from src.domain.usecase.run_upscale_batch_usecase import RunUpscaleBatchUseCase
 from src.ui.workers.upscale_queue_worker import UpscaleQueueWorker
+
+
+OUTPUT_FORMAT_MODE_KEEP_INPUT = "keep_input"
+OUTPUT_FORMAT_MODE_WEBP_LOSSLESS = "webp_lossless"
+OUTPUT_FORMAT_OPTIONS: list[tuple[str, str]] = [
+    ("入力と同じ", OUTPUT_FORMAT_MODE_KEEP_INPUT),
+    ("WebP（ロスレス）", OUTPUT_FORMAT_MODE_WEBP_LOSSLESS),
+]
 
 
 class MainWindow(QMainWindow):
@@ -39,7 +46,6 @@ class MainWindow(QMainWindow):
         self._build_ui()
         self._bind_events()
         self._update_file_display()
-        self._update_output_format_display()
         self._update_start_button_state()
 
     def _build_ui(self) -> None:
@@ -90,10 +96,8 @@ class MainWindow(QMainWindow):
         )
         form_layout.addRow("拡大率:", self.scale_combo)
 
-        self.output_format_display = QLineEdit()
-        self.output_format_display.setReadOnly(True)
-        self.output_format_display.setText("未選択")
-        form_layout.addRow("保存形式:", self.output_format_display)
+        self.output_format_combo = self._build_combo_box(OUTPUT_FORMAT_OPTIONS)
+        form_layout.addRow("保存形式:", self.output_format_combo)
 
         root_layout.addLayout(form_layout)
 
@@ -116,7 +120,7 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(root)
 
     @staticmethod
-    def _build_combo_box(values: list[tuple[str, int]]) -> QComboBox:
+    def _build_combo_box(values: list[tuple[str, object]]) -> QComboBox:
         combo = QComboBox()
         combo.setFixedHeight(42)
         for label, data in values:
@@ -147,9 +151,17 @@ class MainWindow(QMainWindow):
 
         denoise_level = int(self.denoise_combo.currentData())
         scale_factor = int(self.scale_combo.currentData())
-        self._start_worker(denoise_level=denoise_level, scale_factor=scale_factor)
+        output_format_mode_data = self.output_format_combo.currentData()
+        if not isinstance(output_format_mode_data, str):
+            raise RuntimeError("Output format selection is invalid.")
 
-    def _start_worker(self, denoise_level: int, scale_factor: int) -> None:
+        self._start_worker(
+            denoise_level=denoise_level,
+            scale_factor=scale_factor,
+            output_format_mode=output_format_mode_data,
+        )
+
+    def _start_worker(self, denoise_level: int, scale_factor: int, output_format_mode: str) -> None:
         # Guard against re-entry if the previous thread has not yet fully cleaned up.
         if self._worker_thread is not None:
             return
@@ -163,6 +175,7 @@ class MainWindow(QMainWindow):
             input_files=list(self._selected_files),
             denoise_level=denoise_level,
             scale_factor=scale_factor,
+            output_format_mode=output_format_mode,
         )
         thread = QThread(self)
         worker.moveToThread(thread)
@@ -246,19 +259,6 @@ class MainWindow(QMainWindow):
         file_names = [path.name for path in self._selected_files]
         self.file_list_textbox.setPlainText("\n".join(file_names))
 
-    def _update_output_format_display(self) -> None:
-        if not self._selected_files:
-            self.output_format_display.setText("未選択")
-            return
-
-        extensions = sorted({path.suffix.lower() for path in self._selected_files})
-        if len(extensions) == 1:
-            self.output_format_display.setText(extensions[0])
-            return
-
-        formatted = ", ".join(extensions)
-        self.output_format_display.setText(f"入力と同じ ({formatted})")
-
     def _update_start_button_state(self) -> None:
         can_start = bool(self._selected_files) and not self._is_running and self._worker_thread is None
         self.start_button.setEnabled(can_start)
@@ -266,7 +266,6 @@ class MainWindow(QMainWindow):
     def _set_selected_files(self, files: list[Path]) -> None:
         self._selected_files = files
         self._update_file_display()
-        self._update_output_format_display()
         self.result_label.setText("最終結果: 入力待機")
         self._update_start_button_state()
 
