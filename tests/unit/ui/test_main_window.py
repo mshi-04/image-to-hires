@@ -4,21 +4,17 @@ from unittest.mock import patch
 
 try:
     from PySide6.QtWidgets import QApplication
-
-    from src.domain.usecase.run_upscale_batch_usecase import (
-        RunUpscaleBatchResult,
-        UpscaleBatchItemResult,
-    )
-    from src.domain.value_objects.denoise_level import DenoiseLevel
-    from src.domain.value_objects.scale_factor import ScaleFactor
-    from src.ui.windows.main_window import MainWindow
-    from src.ui.workers.upscale_queue_worker import UpscaleQueueWorker
-
-    PYSIDE_AVAILABLE = True
 except ModuleNotFoundError:
     QApplication = None
-    MainWindow = None
     PYSIDE_AVAILABLE = False
+else:
+    PYSIDE_AVAILABLE = True
+
+from src.domain.usecase.run_upscale_batch_usecase import RunUpscaleBatchResult, UpscaleBatchItemResult
+from src.domain.value_objects.denoise_level import DenoiseLevel
+from src.domain.value_objects.scale_factor import ScaleFactor
+from src.ui.windows.main_window import MainWindow
+from src.ui.workers.upscale_queue_worker import UpscaleQueueWorker
 
 
 class FakeBatchUseCase:
@@ -35,7 +31,7 @@ class FakeBatchUseCase:
     def execute(self, command, item_started_callback=None, progress_callback=None):  # noqa: ANN001
         self.ensure_runtime_ready()
         self.last_command = command
-        paths = [Path(p) for p in command.input_image_paths]
+        paths = [Path(path) for path in command.input_image_paths]
         scale = ScaleFactor(command.scale_factor)
         denoise = DenoiseLevel(command.denoise_level)
         items = []
@@ -67,32 +63,29 @@ class TestMainWindow(unittest.TestCase):
         cls._app = QApplication.instance() or QApplication([])
 
     def setUp(self) -> None:
-        # Arrange
         self.window = MainWindow(batch_usecase=FakeBatchUseCase())
 
     def tearDown(self) -> None:
         self.window.close()
 
+    def _set_single_file(self) -> None:
+        self.window._set_selected_files([Path.cwd() / "images" / "a.png"])
+
     def test_initial_state_disables_start_button(self) -> None:
         # Arrange
-        window = self.window
 
         # Act
-        is_enabled = window.start_button.isEnabled()
 
         # Assert
-        self.assertFalse(is_enabled)
-        self.assertEqual(window.output_format_combo.currentText(), "入力と同じ")
-        self.assertEqual(window.output_format_combo.currentData(), "keep_input")
-        self.assertEqual(window.scale_combo.currentData(), 1)
-        self.assertEqual(window.denoise_combo.currentData(), -1)
-        self.assertFalse(window.denoise_combo.isEnabled())
+        self.assertFalse(self.window.start_button.isEnabled())
+        self.assertEqual(self.window.scale_combo.currentData(), 2)
+        self.assertEqual(self.window.scale_combo.count(), 3)
+        self.assertTrue(self.window.denoise_combo.isEnabled())
 
-    def test_file_selection_updates_file_list_without_changing_output_format(self) -> None:
+    def test_file_selection_updates_file_list(self) -> None:
         # Arrange
         base = Path.cwd() / "images"
         selected = [str(base / "a.png"), str(base / "b.png")]
-        self.window.output_format_combo.setCurrentIndex(1)
 
         # Act
         with patch("src.ui.windows.main_window.QFileDialog.getOpenFileNames", return_value=(selected, "")):
@@ -100,68 +93,31 @@ class TestMainWindow(unittest.TestCase):
 
         # Assert
         self.assertEqual(self.window.file_list_textbox.toPlainText(), "a.png\nb.png")
-        self.assertEqual(self.window.output_format_combo.currentText(), "WebP（ロスレス）")
-        self.assertEqual(self.window.output_format_combo.currentData(), "webp_lossless")
         self.assertTrue(self.window.start_button.isEnabled())
 
-    def test_output_format_combo_has_expected_options(self) -> None:
+    def test_scale_combo_has_expected_options(self) -> None:
         # Arrange
-        window = self.window
-
-        # Act / Assert
-        self.assertEqual(window.output_format_combo.count(), 2)
-        self.assertEqual(window.output_format_combo.itemText(0), "入力と同じ")
-        self.assertEqual(window.output_format_combo.itemData(0), "keep_input")
-        self.assertEqual(window.output_format_combo.itemText(1), "WebP（ロスレス）")
-        self.assertEqual(window.output_format_combo.itemData(1), "webp_lossless")
-
-    def test_scale_combo_has_expected_options_with_one_x(self) -> None:
-        # Arrange
-        window = self.window
-
-        # Act / Assert
-        self.assertEqual(window.scale_combo.count(), 4)
-        self.assertEqual(window.scale_combo.itemText(0), "1x（等倍）")
-        self.assertEqual(window.scale_combo.itemData(0), 1)
-        self.assertEqual(window.scale_combo.itemText(1), "2x")
-        self.assertEqual(window.scale_combo.itemData(1), 2)
-        self.assertEqual(window.scale_combo.itemText(2), "3x")
-        self.assertEqual(window.scale_combo.itemData(2), 3)
-        self.assertEqual(window.scale_combo.itemText(3), "4x")
-        self.assertEqual(window.scale_combo.itemData(3), 4)
-
-    def test_denoise_is_locked_for_one_x_and_unlocked_for_other_scales(self) -> None:
-        # Arrange
-        self.window.scale_combo.setCurrentIndex(1)
-        self.window.denoise_combo.setCurrentIndex(self.window.denoise_combo.findData(2))
 
         # Act
-        self.window.scale_combo.setCurrentIndex(0)
-        denoise_locked_value = self.window.denoise_combo.currentData()
-        denoise_locked_enabled = self.window.denoise_combo.isEnabled()
-
-        self.window.scale_combo.setCurrentIndex(1)
-        denoise_restored_value = self.window.denoise_combo.currentData()
-        denoise_restored_enabled = self.window.denoise_combo.isEnabled()
 
         # Assert
-        self.assertEqual(denoise_locked_value, -1)
-        self.assertFalse(denoise_locked_enabled)
-        self.assertEqual(denoise_restored_value, 2)
-        self.assertTrue(denoise_restored_enabled)
+        self.assertEqual(self.window.scale_combo.count(), 3)
+        self.assertEqual(self.window.scale_combo.itemText(0), "2x")
+        self.assertEqual(self.window.scale_combo.itemData(0), 2)
+        self.assertEqual(self.window.scale_combo.itemText(1), "3x")
+        self.assertEqual(self.window.scale_combo.itemData(1), 3)
+        self.assertEqual(self.window.scale_combo.itemText(2), "4x")
+        self.assertEqual(self.window.scale_combo.itemData(2), 4)
 
-    def test_start_button_disabled_while_running_and_enabled_after_finish(self) -> None:
+    def test_start_button_state_follows_batch_lifecycle(self) -> None:
         # Arrange
-        self.window._selected_files = [Path.cwd() / "images" / "a.png"]
-        self.window._update_start_button_state()
+        self._set_single_file()
 
         # Act
         self.window._on_batch_started(1)
-        self.window._update_start_button_state()
         running_state = self.window.start_button.isEnabled()
 
         self.window._on_batch_finished(1, 0)
-        self.window._update_start_button_state()
         completed_state = self.window.start_button.isEnabled()
 
         # Assert
@@ -170,7 +126,7 @@ class TestMainWindow(unittest.TestCase):
 
     def test_start_button_remains_disabled_until_worker_thread_cleanup(self) -> None:
         # Arrange
-        self.window._selected_files = [Path.cwd() / "images" / "a.png"]
+        self._set_single_file()
         self.window._worker_thread = object()  # type: ignore[assignment]
         self.window.select_button.setEnabled(False)
         self.window._update_start_button_state()
@@ -190,7 +146,7 @@ class TestMainWindow(unittest.TestCase):
         self.assertTrue(state_after_cleanup)
         self.assertTrue(select_after_cleanup)
 
-    def test_worker_passes_selected_output_format_mode_to_command(self) -> None:
+    def test_worker_passes_parameters_to_command(self) -> None:
         # Arrange
         fake_usecase = FakeBatchUseCase()
         worker = UpscaleQueueWorker(
@@ -198,7 +154,6 @@ class TestMainWindow(unittest.TestCase):
             input_files=[Path.cwd() / "images" / "a.png"],
             denoise_level=1,
             scale_factor=2,
-            output_format_mode="webp_lossless",
         )
 
         # Act
@@ -206,7 +161,8 @@ class TestMainWindow(unittest.TestCase):
 
         # Assert
         self.assertIsNotNone(fake_usecase.last_command)
-        self.assertEqual(fake_usecase.last_command.output_format_mode, "webp_lossless")
+        self.assertEqual(fake_usecase.last_command.denoise_level, 1)
+        self.assertEqual(fake_usecase.last_command.scale_factor, 2)
 
     def test_start_worker_does_not_check_runtime_before_thread_start(self) -> None:
         # Arrange
@@ -233,9 +189,8 @@ class TestMainWindow(unittest.TestCase):
 
     def test_batch_failed_shows_critical_message_and_resets_state(self) -> None:
         # Arrange
-        self.window._selected_files = [Path.cwd() / "images" / "a.png"]
+        self._set_single_file()
         self.window._is_running = True
-        self.window.progress_label.setText("進行状況: 1/1")
 
         # Act
         with patch("src.ui.windows.main_window.QMessageBox.critical") as critical:

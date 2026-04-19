@@ -182,3 +182,15 @@
 ## 14. 文書更新ルール
 
 サブエージェント運用の方針を変えたときは、この文書と `AGENTS.md` の文書マップを一緒に更新する。
+
+AI 向けの作業方針を変えた場合は、少なくとも次の文書を同じ PR で整合させる。
+
+- `AGENTS.md`
+- `docs/overview.md`
+- `docs/implementation-plan.md`
+- `docs/requirements.md`
+- `docs/technical-design.md`
+- `docs/coding-standards.md`
+- `docs/unit-test-guidelines.md`
+- `docs/rules/coding-standards.md`
+- `docs/rules/unit-test-guidelines.md`
