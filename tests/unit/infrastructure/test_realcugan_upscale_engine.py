@@ -338,11 +338,63 @@ class TestRealCuganUpscaleEngine(unittest.TestCase):
 
             runner.assert_called_once()
             command = runner.call_args.args[0]
+            self.assertEqual(command[command.index("-i") + 1], str(input_path))
             self.assertEqual(command[command.index("-s") + 1], "2")
             self.assertEqual(command[command.index("-n") + 1], "-1")
             self.assertEqual(command[command.index("-j") + 1], "4:4:4")
             self.assertEqual(command[command.index("-t") + 1], "0")
             self._assert_artifact_image(artifact, (4, 4), "PNG")
+
+    def test_upscale_uses_direct_input_for_rgb_jpeg_without_exif_rotation(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp_path = Path(tmp_dir)
+            input_path = tmp_path / "input.jpg"
+            output_path = tmp_path / "output.png"
+            Image.new("RGB", (2, 2), color=(100, 120, 140)).save(input_path, format="JPEG")
+            engine, _, _ = self._make_engine_with_stub(tmp_path)
+
+            def fake_runner(command: list[str]) -> subprocess.CompletedProcess[str]:
+                output_file = Path(command[command.index("-o") + 1])
+                Image.new("RGB", (4, 4), color=(10, 20, 30)).save(output_file, format="PNG")
+                return subprocess.CompletedProcess(args=command, returncode=0, stdout="", stderr="")
+
+            with mock.patch.object(engine, "_run_realcugan", side_effect=fake_runner) as runner:
+                artifact = engine.upscale(self._make_job(input_path, output_path, 2, -1))
+
+            try:
+                command = runner.call_args.args[0]
+                self.assertEqual(command[command.index("-i") + 1], str(input_path))
+            finally:
+                artifact.cleanup()
+
+    def test_upscale_falls_back_to_temporary_png_for_exif_rotated_jpeg(self) -> None:
+        if not hasattr(Image, "Exif"):
+            self.skipTest("Current Pillow version does not support Image.Exif.")
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp_path = Path(tmp_dir)
+            input_path = tmp_path / "input.jpg"
+            output_path = tmp_path / "output.png"
+            exif = Image.Exif()
+            exif[274] = 6
+            Image.new("RGB", (2, 3), color=(10, 20, 30)).save(input_path, format="JPEG", exif=exif)
+            engine, _, _ = self._make_engine_with_stub(tmp_path)
+
+            def fake_runner(command: list[str]) -> subprocess.CompletedProcess[str]:
+                output_file = Path(command[command.index("-o") + 1])
+                Image.new("RGB", (6, 4), color=(10, 20, 30)).save(output_file, format="PNG")
+                return subprocess.CompletedProcess(args=command, returncode=0, stdout="", stderr="")
+
+            with mock.patch.object(engine, "_run_realcugan", side_effect=fake_runner) as runner:
+                artifact = engine.upscale(self._make_job(input_path, output_path, 2, -1))
+
+            try:
+                command = runner.call_args.args[0]
+                actual_input_path = Path(command[command.index("-i") + 1])
+                self.assertNotEqual(actual_input_path, input_path)
+                self.assertEqual(actual_input_path.name, "input.png")
+            finally:
+                artifact.cleanup()
 
     def test_upscale_uses_low_thread_config_for_large_image(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -361,6 +413,28 @@ class TestRealCuganUpscaleEngine(unittest.TestCase):
                 artifact = engine.upscale(self._make_job(input_path, output_path, 2, 0))
             try:
                 self.assertEqual(runner.call_args.args[0][runner.call_args.args[0].index("-j") + 1], "2:2:2")
+            finally:
+                artifact.cleanup()
+
+    def test_upscale_uses_direct_input_for_webp_without_normalization(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp_path = Path(tmp_dir)
+            input_path = tmp_path / "input.webp"
+            output_path = tmp_path / "output.png"
+            Image.new("RGBA", (2, 2), color=(100, 120, 140, 255)).save(input_path, format="WEBP", lossless=True)
+            engine, _, _ = self._make_engine_with_stub(tmp_path)
+
+            def fake_runner(command: list[str]) -> subprocess.CompletedProcess[str]:
+                output_file = Path(command[command.index("-o") + 1])
+                Image.new("RGB", (4, 4), color=(10, 20, 30)).save(output_file, format="PNG")
+                return subprocess.CompletedProcess(args=command, returncode=0, stdout="", stderr="")
+
+            with mock.patch.object(engine, "_run_realcugan", side_effect=fake_runner) as runner:
+                artifact = engine.upscale(self._make_job(input_path, output_path, 2, 0))
+
+            try:
+                command = runner.call_args.args[0]
+                self.assertEqual(command[command.index("-i") + 1], str(input_path))
             finally:
                 artifact.cleanup()
 
@@ -404,33 +478,46 @@ class TestRealCuganUpscaleEngine(unittest.TestCase):
             finally:
                 artifact.cleanup()
 
-    def test_upscale_reuses_work_directory_and_cleans_intermediate_files(self) -> None:
+    def test_upscale_reuses_fixed_temporary_file_names_for_fallback_path(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             tmp_path = Path(tmp_dir)
-            input_path = tmp_path / "input.png"
-            output_path = tmp_path / "output.png"
-            Image.new("RGB", (2, 2), color=(100, 120, 140)).save(input_path, format="PNG")
+            input_path = tmp_path / "input.jpg"
+            output_path = tmp_path / "output.jpg"
+            Image.new("CMYK", (2, 2), color=(0, 128, 128, 0)).save(input_path, format="JPEG")
             engine, _, _ = self._make_engine_with_stub(tmp_path)
+            input_paths: list[Path] = []
             output_paths: list[Path] = []
+            artifact_paths: list[Path] = []
 
             def fake_runner(command: list[str]) -> subprocess.CompletedProcess[str]:
+                input_paths.append(Path(command[command.index("-i") + 1]))
                 output_file = Path(command[command.index("-o") + 1])
                 output_paths.append(output_file)
                 Image.new("RGB", (4, 4), color=(10, 20, 30)).save(output_file, format="PNG")
                 return subprocess.CompletedProcess(args=command, returncode=0, stdout="", stderr="")
 
             with mock.patch.object(engine, "_run_realcugan", side_effect=fake_runner):
-                first_artifact = engine.upscale(self._make_job(input_path, output_path, 2, 0))
+                first_artifact = engine.upscale(self._make_job(input_path, output_path, 2, -1))
+                artifact_paths.append(Path(first_artifact.temporary_path))
                 first_artifact.cleanup()
-                second_artifact = engine.upscale(self._make_job(input_path, output_path, 2, 0))
+                second_artifact = engine.upscale(self._make_job(input_path, output_path, 2, -1))
+                artifact_paths.append(Path(second_artifact.temporary_path))
                 second_artifact.cleanup()
 
+            self.assertEqual(len(input_paths), 2)
             self.assertEqual(len(output_paths), 2)
+            self.assertEqual(input_paths[0], input_paths[1])
             self.assertEqual(output_paths[0].parent, output_paths[1].parent)
+            self.assertEqual(output_paths[0], output_paths[1])
+            self.assertEqual(input_paths[0].name, "input.png")
+            self.assertEqual(output_paths[0].name, "realcugan.png")
+            self.assertEqual(artifact_paths[0].name, "encoded.jpg")
+            self.assertEqual(artifact_paths[1].name, "encoded.jpg")
+            self.assertFalse(input_paths[0].exists())
             self.assertFalse(output_paths[0].exists())
             self.assertFalse(output_paths[1].exists())
 
-    def test_upscale_accepts_cmyk_jpeg_input_for_realcugan_path(self) -> None:
+    def test_upscale_falls_back_to_temporary_png_for_cmyk_jpeg_input(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             tmp_path = Path(tmp_dir)
             input_path = tmp_path / "input.jpg"
@@ -443,10 +530,17 @@ class TestRealCuganUpscaleEngine(unittest.TestCase):
                 Image.new("RGB", (4, 4), color=(10, 20, 30)).save(output_file, format="PNG")
                 return subprocess.CompletedProcess(args=command, returncode=0, stdout="", stderr="")
 
-            with mock.patch.object(engine, "_run_realcugan", side_effect=fake_runner):
+            with mock.patch.object(engine, "_run_realcugan", side_effect=fake_runner) as runner:
                 artifact = engine.upscale(self._make_job(input_path, output_path, 2, -1))
 
-            self._assert_artifact_image(artifact, (4, 4), "PNG")
+            try:
+                command = runner.call_args.args[0]
+                actual_input_path = Path(command[command.index("-i") + 1])
+                self.assertNotEqual(actual_input_path, input_path)
+                self.assertEqual(actual_input_path.name, "input.png")
+                self._assert_artifact_image(artifact, (4, 4), "PNG")
+            finally:
+                artifact.cleanup()
 
     def test_upscale_raises_when_realcugan_returns_non_zero(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
