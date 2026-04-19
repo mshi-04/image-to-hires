@@ -84,10 +84,19 @@ class RealCuganUpscaleEngine(UpscaleEnginePort):
             raise RuntimeError("Pillow is required to run RealCuganUpscaleEngine.") from exc
 
         with Image.open(image_path) as source_image:
+            # PNG かつ Real-CUGAN 互換モードかつ EXIF 回転不要なら原本を直接渡せる
+            can_pass_original = (
+                self._should_use_realcugan()
+                and image_path.suffix.lower() == ".png"
+                and source_image.mode in {"RGB", "RGBA", "L", "LA"}
+                and not self._has_exif_rotation(source_image)
+            )
             normalized_image = ImageOps.exif_transpose(source_image)
             if self._should_use_realcugan():
                 self.ensure_runtime_ready()
-                return self._upscale_with_realcugan(normalized_image, job)
+                return self._upscale_with_realcugan(
+                    normalized_image, job, image_path.resolve(strict=False) if can_pass_original else None
+                )
             return self._upscale_with_pillow(normalized_image, job)
 
     def _should_use_realcugan(self) -> bool:
@@ -174,7 +183,12 @@ class RealCuganUpscaleEngine(UpscaleEnginePort):
     def _get_current_working_directory() -> Path:
         return Path.cwd().resolve(strict=False)
 
-    def _upscale_with_realcugan(self, image: "Image.Image", job: UpscaleJob) -> GeneratedImageArtifact:
+    def _upscale_with_realcugan(
+        self,
+        image: "Image.Image",
+        job: UpscaleJob,
+        original_input: "Path | None" = None,
+    ) -> GeneratedImageArtifact:
         from PIL import Image
 
         if self._realcugan_executable is None or self._realcugan_models_dir is None:
@@ -182,16 +196,22 @@ class RealCuganUpscaleEngine(UpscaleEnginePort):
 
         work_directory = self._ensure_work_directory(Path(job.output_image.value))
         operation_id = uuid4().hex
-        input_png = work_directory / f"{operation_id}-input.png"
-        realcugan_output_png = work_directory / f"{operation_id}-realcugan.png"
         output_extension = Path(job.output_image.value).suffix.lower()
         output_format = self._resolve_output_format(output_extension)
+        realcugan_output_png = work_directory / f"{operation_id}-realcugan.png"
         encoded_output = work_directory / f"{operation_id}-encoded{output_extension}"
 
-        try:
+        if original_input is not None:
+            # 原本 PNG を直接使用 — 一時入力ファイル不要
+            input_png = original_input
+            input_temp_files: list[Path] = []
+        else:
+            input_png = work_directory / f"{operation_id}-input.png"
             prepared_input = self._prepare_for_realcugan_png(image)
             prepared_input.save(input_png, format="PNG")
+            input_temp_files = [input_png]
 
+        try:
             command = [
                 str(self._realcugan_executable),
                 "-i", str(input_png),
@@ -200,7 +220,7 @@ class RealCuganUpscaleEngine(UpscaleEnginePort):
                 "-n", str(job.denoise_level.value),
                 "-m", str(self._realcugan_models_dir),
                 "-t", "0",  # タイルサイズを自動決定させる
-                "-j", self._resolve_thread_config(prepared_input),
+                "-j", self._resolve_thread_config(image),
                 "-f", "png",
                 # "-x",  # TTAを有効にすると処理時間が数倍に延びるためMVPでは無効化する
             ]
@@ -217,7 +237,7 @@ class RealCuganUpscaleEngine(UpscaleEnginePort):
             if output_format == "PNG":
                 return GeneratedImageArtifact(
                     temporary_path=realcugan_output_png,
-                    cleanup=self._build_cleanup([input_png, realcugan_output_png]),
+                    cleanup=self._build_cleanup([*input_temp_files, realcugan_output_png], work_directory),
                 )
 
             with Image.open(realcugan_output_png) as result_image:
@@ -232,10 +252,12 @@ class RealCuganUpscaleEngine(UpscaleEnginePort):
 
             return GeneratedImageArtifact(
                 temporary_path=encoded_output,
-                cleanup=self._build_cleanup([input_png, realcugan_output_png, encoded_output]),
+                cleanup=self._build_cleanup(
+                    [*input_temp_files, realcugan_output_png, encoded_output], work_directory
+                ),
             )
         except Exception:
-            self._cleanup_files([input_png, realcugan_output_png, encoded_output])
+            self._cleanup_files([*input_temp_files, realcugan_output_png, encoded_output])
             raise
 
     def _upscale_with_pillow(self, image: "Image.Image", job: UpscaleJob) -> GeneratedImageArtifact:
@@ -257,7 +279,7 @@ class RealCuganUpscaleEngine(UpscaleEnginePort):
             )
             return GeneratedImageArtifact(
                 temporary_path=encoded_output,
-                cleanup=self._build_cleanup([encoded_output]),
+                cleanup=self._build_cleanup([encoded_output], work_directory),
             )
         except Exception:
             self._cleanup_files([encoded_output])
@@ -292,13 +314,24 @@ class RealCuganUpscaleEngine(UpscaleEnginePort):
             file_path.unlink(missing_ok=True)
 
     @classmethod
-    def _build_cleanup(cls, files: list[Path]) -> Callable[[], None]:
+    def _build_cleanup(cls, files: list[Path], directory: Path | None = None) -> Callable[[], None]:
         targets = tuple(files)
+        work_dir = directory
 
         def cleanup() -> None:
             cls._cleanup_files(list(targets))
+            if work_dir is not None:
+                cls._remove_empty_directory_if_exists(work_dir)
 
         return cleanup
+
+    @staticmethod
+    def _has_exif_rotation(image: "Image.Image") -> bool:
+        try:
+            exif = image.getexif()
+            return exif.get(274, 1) != 1  # 274 = EXIF Orientation; 1 = 回転なし
+        except Exception:  # noqa: BLE001
+            return False
 
     def _resolve_thread_config(self, image: "Image.Image") -> str:
         pixel_count = image.width * image.height
