@@ -65,9 +65,18 @@ class RunUpscaleBatchUseCase:
     ) -> RunUpscaleBatchResult:
         scale_factor = ScaleFactor(command.scale_factor)
         denoise_level = DenoiseLevel(command.denoise_level)
-        self.ensure_runtime_ready()
         input_image_paths = list(command.input_image_paths)
         total_count = len(input_image_paths)
+        if total_count == 0:
+            return RunUpscaleBatchResult(
+                items=tuple(),
+                processed_count=0,
+                success_count=0,
+                failure_count=0,
+                total_count=0,
+            )
+
+        self.ensure_runtime_ready()
         output_image_paths = self._resolve_output_image_paths(command.output_image_paths, total_count)
         single_usecase = RunUpscaleUseCase(self._upscale_engine, self._image_storage)
 

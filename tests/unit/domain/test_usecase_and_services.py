@@ -3,7 +3,6 @@ from pathlib import Path
 
 from src.domain.entities.generated_image_artifact import GeneratedImageArtifact
 from src.domain.entities.upscale_job import UpscaleJob
-from src.domain.exceptions import UnsupportedImageFormatError
 from src.domain.ports.image_storage_port import ImageStoragePort
 from src.domain.ports.upscale_engine_port import UpscaleEnginePort
 from src.domain.services.output_path_service import build_default_output_path
@@ -82,7 +81,7 @@ class TestDomainServicesAndUseCase(unittest.TestCase):
                 # Assert
                 self.assertEqual(output.value, Path(expected))
 
-    def test_run_upscale_usecase_normalizes_explicit_output_extension(self) -> None:
+    def test_run_upscale_usecase_ignores_explicit_output_path_and_uses_default_naming(self) -> None:
         # Arrange
         usecase, fake_engine, fake_storage = self._build_usecase()
 
@@ -97,12 +96,13 @@ class TestDomainServicesAndUseCase(unittest.TestCase):
         )
 
         # Assert
+        expected_output = Path("C:/images/input-denoise0x-up2x.jpg")
         self.assertEqual(
             fake_engine.calls,
-            [(Path("C:/images/input.jpg"), 2, 0, Path("C:/images/custom-output.jpg"))],
+            [(Path("C:/images/input.jpg"), 2, 0, expected_output)],
         )
-        self.assertEqual(fake_storage.calls, [Path("C:/images/custom-output.jpg")])
-        self.assertEqual(result.output_image_path.value, Path("C:/images/custom-output.jpg"))
+        self.assertEqual(fake_storage.calls, [expected_output])
+        self.assertEqual(result.output_image_path.value, expected_output)
 
     def test_run_upscale_usecase_builds_default_output_when_output_path_is_none(self) -> None:
         # Arrange
@@ -181,7 +181,7 @@ class TestDomainServicesAndUseCase(unittest.TestCase):
             ],
         )
 
-    def test_run_upscale_batch_usecase_normalizes_explicit_output_extensions(self) -> None:
+    def test_run_upscale_batch_usecase_ignores_explicit_output_paths_and_uses_default_naming(self) -> None:
         # Arrange
         fake_engine = FakeUpscaleEngine()
         fake_storage = FakeImageStorage()
@@ -202,8 +202,8 @@ class TestDomainServicesAndUseCase(unittest.TestCase):
         self.assertEqual(
             fake_engine.calls,
             [
-                (Path("C:/images/a.png"), 2, 1, Path("C:/out/a.png")),
-                (Path("C:/images/b.jpg"), 2, 1, Path("C:/out/b.jpg")),
+                (Path("C:/images/a.png"), 2, 1, Path("C:/images/a-denoise1x-up2x.png")),
+                (Path("C:/images/b.jpg"), 2, 1, Path("C:/images/b-denoise1x-up2x.jpg")),
             ],
         )
 
@@ -245,7 +245,7 @@ class TestDomainServicesAndUseCase(unittest.TestCase):
                 )
             )
 
-    def test_run_upscale_batch_usecase_treats_empty_output_path_as_invalid(self) -> None:
+    def test_run_upscale_batch_usecase_ignores_empty_output_path_and_uses_default_naming(self) -> None:
         # Arrange
         fake_engine = FakeUpscaleEngine()
         fake_storage = FakeImageStorage()
@@ -262,9 +262,36 @@ class TestDomainServicesAndUseCase(unittest.TestCase):
         )
 
         # Assert
-        self.assertEqual(result.failure_count, 1)
-        self.assertFalse(result.items[0].is_success)
-        self.assertIsInstance(result.items[0].error, UnsupportedImageFormatError)
+        self.assertEqual(result.success_count, 1)
+        self.assertEqual(result.failure_count, 0)
+        self.assertTrue(result.items[0].is_success)
+        self.assertEqual(result.items[0].output_image_path, Path("C:/images/one-denoise0x-up2x.png"))
+
+    def test_run_upscale_batch_usecase_skips_runtime_check_when_input_is_empty(self) -> None:
+        # Arrange
+        fake_engine = FakeUpscaleEngine(runtime_error=RuntimeError("runtime missing"))
+        fake_storage = FakeImageStorage()
+        usecase = RunUpscaleBatchUseCase(upscale_engine=fake_engine, image_storage=fake_storage)
+
+        # Act
+        result = usecase.execute(
+            RunUpscaleBatchCommand(
+                input_image_paths=[],
+                output_image_paths=[],
+                scale_factor=2,
+                denoise_level=0,
+            )
+        )
+
+        # Assert
+        self.assertEqual(result.total_count, 0)
+        self.assertEqual(result.processed_count, 0)
+        self.assertEqual(result.success_count, 0)
+        self.assertEqual(result.failure_count, 0)
+        self.assertEqual(result.items, tuple())
+        self.assertEqual(fake_engine.ready_calls, 0)
+        self.assertEqual(fake_engine.calls, [])
+        self.assertEqual(fake_storage.calls, [])
 
 
 if __name__ == "__main__":

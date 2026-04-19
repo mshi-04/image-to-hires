@@ -4,18 +4,17 @@ from unittest.mock import patch
 
 try:
     from PySide6.QtWidgets import QApplication
-
-    from src.domain.usecase.run_upscale_batch_usecase import RunUpscaleBatchResult, UpscaleBatchItemResult
-    from src.domain.value_objects.denoise_level import DenoiseLevel
-    from src.domain.value_objects.scale_factor import ScaleFactor
-    from src.ui.windows.main_window import MainWindow
-    from src.ui.workers.upscale_queue_worker import UpscaleQueueWorker
-
-    PYSIDE_AVAILABLE = True
 except ModuleNotFoundError:
     QApplication = None
-    MainWindow = None
     PYSIDE_AVAILABLE = False
+else:
+    PYSIDE_AVAILABLE = True
+
+from src.domain.usecase.run_upscale_batch_usecase import RunUpscaleBatchResult, UpscaleBatchItemResult
+from src.domain.value_objects.denoise_level import DenoiseLevel
+from src.domain.value_objects.scale_factor import ScaleFactor
+from src.ui.windows.main_window import MainWindow
+from src.ui.workers.upscale_queue_worker import UpscaleQueueWorker
 
 
 class FakeBatchUseCase:
@@ -70,8 +69,7 @@ class TestMainWindow(unittest.TestCase):
         self.window.close()
 
     def _set_single_file(self) -> None:
-        self.window._selected_files = [Path.cwd() / "images" / "a.png"]
-        self.window._update_start_button_state()
+        self.window._set_selected_files([Path.cwd() / "images" / "a.png"])
 
     def test_initial_state_disables_start_button(self) -> None:
         # Arrange

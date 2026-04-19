@@ -17,7 +17,8 @@
 - `models/`: 推論に使う学習済み重みを置く
 - `artifacts/`: 変換中の検証用成果物や一時的な比較出力を置く
 - `outputs/`: 手動確認で保存した出力画像を置く
-- `tmp/realcugan-work/`: Real-CUGAN 実行時の一時入力と一時出力 (`input.png` / `output.png`) を置く
+- `tmp/realcugan-work/`: 出力先が未確定の経路で使う Real-CUGAN 作業ディレクトリを置く
+- 出力先フォルダ配下の `.tmp-realcugan-<engine-id>/`: 通常の Real-CUGAN 実行時に一時入力と一時出力を再利用する
 
 これらは大きなバイナリを含みやすいため、`.gitignore` で除外している。
 
@@ -34,6 +35,9 @@
   - 例: `bin/realcugan/realcugan-ncnn-vulkan.exe`
 - 学習済み重みは `models/` 配下へ置く。
   - 例: `models/realcugan/models-se/` 等 (解凍したモデル構成をそのまま配置)
+- 2x / 3x / 4x の入力で EXIF 回転補正と色モード変換が不要な PNG / JPEG / WebP は、元ファイルをそのまま Real-CUGAN へ渡す
+- EXIF 回転補正または色モード変換が必要な入力だけ、`.tmp-realcugan-<engine-id>/input.png` を作って Real-CUGAN へ渡す
+- 一時出力は `.tmp-realcugan-<engine-id>/realcugan.png` を使い、必要に応じて `encoded.jpg` / `encoded.webp` / `encoded.png` へ再エンコードする
 - 検証用の生成物は `artifacts/` 配下へ置く
 - 手動保存した出力例は `outputs/` 配下へ置く
 - 生成物の命名規則やサブディレクトリ構成を決めたら、この文書へ追記する
