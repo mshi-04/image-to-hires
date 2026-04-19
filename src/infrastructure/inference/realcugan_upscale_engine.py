@@ -95,7 +95,7 @@ class RealCuganUpscaleEngine(UpscaleEnginePort):
             if self._should_use_realcugan():
                 self.ensure_runtime_ready()
                 return self._upscale_with_realcugan(
-                    normalized_image, job, image_path if can_pass_original else None
+                    normalized_image, job, image_path.resolve(strict=False) if can_pass_original else None
                 )
             return self._upscale_with_pillow(normalized_image, job)
 
@@ -237,7 +237,7 @@ class RealCuganUpscaleEngine(UpscaleEnginePort):
             if output_format == "PNG":
                 return GeneratedImageArtifact(
                     temporary_path=realcugan_output_png,
-                    cleanup=self._build_cleanup(input_temp_files + [realcugan_output_png], work_directory),
+                    cleanup=self._build_cleanup([*input_temp_files, realcugan_output_png], work_directory),
                 )
 
             with Image.open(realcugan_output_png) as result_image:
@@ -253,11 +253,11 @@ class RealCuganUpscaleEngine(UpscaleEnginePort):
             return GeneratedImageArtifact(
                 temporary_path=encoded_output,
                 cleanup=self._build_cleanup(
-                    input_temp_files + [realcugan_output_png, encoded_output], work_directory
+                    [*input_temp_files, realcugan_output_png, encoded_output], work_directory
                 ),
             )
         except Exception:
-            self._cleanup_files(input_temp_files + [realcugan_output_png, encoded_output])
+            self._cleanup_files([*input_temp_files, realcugan_output_png, encoded_output])
             raise
 
     def _upscale_with_pillow(self, image: "Image.Image", job: UpscaleJob) -> GeneratedImageArtifact:

@@ -1,3 +1,4 @@
+import os
 import subprocess
 import tempfile
 import unittest
@@ -713,7 +714,6 @@ class TestRealCuganUpscaleEngine(unittest.TestCase):
             self.assertTrue(work_dir.is_dir())
 
             # FileImageStorage.save() と同等の操作をシミュレート
-            import os
             os.replace(artifact.temporary_path, output_path)
             artifact.cleanup()
 
