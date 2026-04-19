@@ -1,3 +1,4 @@
+import os
 import subprocess
 import tempfile
 import unittest
@@ -338,9 +339,9 @@ class TestRealCuganUpscaleEngine(unittest.TestCase):
 
             runner.assert_called_once()
             command = runner.call_args.args[0]
+            # RGB PNG かつ EXIF 回転なし → 原本を直接 Real-CUGAN に渡す
             command_input_path = Path(command[command.index("-i") + 1])
-            self.assertNotEqual(command_input_path, input_path)
-            self.assertTrue(command_input_path.name.endswith("-input.png"))
+            self.assertEqual(command_input_path, input_path.resolve())
             self.assertEqual(command[command.index("-s") + 1], "2")
             self.assertEqual(command[command.index("-n") + 1], "-1")
             self.assertEqual(command[command.index("-j") + 1], "4:4:4")
@@ -669,6 +670,54 @@ class TestRealCuganUpscaleEngine(unittest.TestCase):
             encode.assert_called_once()
             self.assertEqual(encode.call_args.kwargs["output_format"], "JPEG")
             self._assert_artifact_image(artifact, (4, 4), "JPEG")
+
+    def test_upscale_passes_original_png_directly_to_realcugan(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp_path = Path(tmp_dir)
+            input_path = tmp_path / "input.png"
+            output_path = tmp_path / "output.png"
+            Image.new("RGB", (2, 2), color=(100, 120, 140)).save(input_path, format="PNG")
+            engine, _, _ = self._make_engine_with_stub(tmp_path)
+
+            def fake_runner(command: list[str]) -> subprocess.CompletedProcess[str]:
+                output_file = Path(command[command.index("-o") + 1])
+                Image.new("RGB", (4, 4), color=(10, 20, 30)).save(output_file, format="PNG")
+                return subprocess.CompletedProcess(args=command, returncode=0, stdout="", stderr="")
+
+            with mock.patch.object(engine, "_run_realcugan", side_effect=fake_runner) as runner:
+                artifact = engine.upscale(self._make_job(input_path, output_path, 2, -1))
+
+            try:
+                command = runner.call_args.args[0]
+                command_input_path = Path(command[command.index("-i") + 1])
+                self.assertEqual(command_input_path, input_path.resolve())
+            finally:
+                artifact.cleanup()
+
+    def test_cleanup_removes_work_directory_when_all_temp_files_deleted(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp_path = Path(tmp_dir)
+            input_path = tmp_path / "input.png"
+            output_path = tmp_path / "output.png"
+            Image.new("RGB", (2, 2), color=(100, 120, 140)).save(input_path, format="PNG")
+            engine, _, _ = self._make_engine_with_stub(tmp_path)
+
+            def fake_runner(command: list[str]) -> subprocess.CompletedProcess[str]:
+                output_file = Path(command[command.index("-o") + 1])
+                Image.new("RGB", (4, 4), color=(10, 20, 30)).save(output_file, format="PNG")
+                return subprocess.CompletedProcess(args=command, returncode=0, stdout="", stderr="")
+
+            with mock.patch.object(engine, "_run_realcugan", side_effect=fake_runner):
+                artifact = engine.upscale(self._make_job(input_path, output_path, 2, -1))
+
+            work_dir = Path(artifact.temporary_path).parent
+            self.assertTrue(work_dir.is_dir())
+
+            # FileImageStorage.save() と同等の操作をシミュレート
+            os.replace(artifact.temporary_path, output_path)
+            artifact.cleanup()
+
+            self.assertFalse(work_dir.exists())
 
     def test_destructor_does_not_remove_returned_artifact_file(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
