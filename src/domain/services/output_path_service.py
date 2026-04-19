@@ -24,15 +24,8 @@ def resolve_output_image_path(
     input_image: InputImagePath,
     scale_factor: ScaleFactor,
     denoise_level: DenoiseLevel,
-    output_image_path: Path | str | None,
+    output_image_path: Path | str | None,  # noqa: ARG001
 ) -> OutputImagePath:
-    """Resolve output path with explicit path precedence."""
-
-    if output_image_path is not None:
-        requested_output_path = Path(output_image_path)
-        if requested_output_path.suffix == "":
-            return OutputImagePath(requested_output_path)
-        normalized_output_path = requested_output_path.with_suffix(input_image.value.suffix.lower())
-        return OutputImagePath(normalized_output_path)
+    """Resolve output path using the default filename contract."""
 
     return build_default_output_path(input_image, scale_factor, denoise_level)
