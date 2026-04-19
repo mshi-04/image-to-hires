@@ -338,7 +338,9 @@ class TestRealCuganUpscaleEngine(unittest.TestCase):
 
             runner.assert_called_once()
             command = runner.call_args.args[0]
-            self.assertEqual(command[command.index("-i") + 1], str(input_path))
+            command_input_path = Path(command[command.index("-i") + 1])
+            self.assertNotEqual(command_input_path, input_path)
+            self.assertTrue(command_input_path.name.endswith("-input.png"))
             self.assertEqual(command[command.index("-s") + 1], "2")
             self.assertEqual(command[command.index("-n") + 1], "-1")
             self.assertEqual(command[command.index("-j") + 1], "4:4:4")
@@ -363,7 +365,9 @@ class TestRealCuganUpscaleEngine(unittest.TestCase):
 
             try:
                 command = runner.call_args.args[0]
-                self.assertEqual(command[command.index("-i") + 1], str(input_path))
+                command_input_path = Path(command[command.index("-i") + 1])
+                self.assertNotEqual(command_input_path, input_path)
+                self.assertTrue(command_input_path.name.endswith("-input.png"))
             finally:
                 artifact.cleanup()
 
@@ -392,7 +396,7 @@ class TestRealCuganUpscaleEngine(unittest.TestCase):
                 command = runner.call_args.args[0]
                 actual_input_path = Path(command[command.index("-i") + 1])
                 self.assertNotEqual(actual_input_path, input_path)
-                self.assertEqual(actual_input_path.name, "input.png")
+                self.assertTrue(actual_input_path.name.endswith("-input.png"))
             finally:
                 artifact.cleanup()
 
@@ -434,7 +438,9 @@ class TestRealCuganUpscaleEngine(unittest.TestCase):
 
             try:
                 command = runner.call_args.args[0]
-                self.assertEqual(command[command.index("-i") + 1], str(input_path))
+                command_input_path = Path(command[command.index("-i") + 1])
+                self.assertNotEqual(command_input_path, input_path)
+                self.assertTrue(command_input_path.name.endswith("-input.png"))
             finally:
                 artifact.cleanup()
 
@@ -506,14 +512,18 @@ class TestRealCuganUpscaleEngine(unittest.TestCase):
 
             self.assertEqual(len(input_paths), 2)
             self.assertEqual(len(output_paths), 2)
-            self.assertEqual(input_paths[0], input_paths[1])
+            self.assertNotEqual(input_paths[0], input_paths[1])
+            self.assertEqual(input_paths[0].parent, input_paths[1].parent)
             self.assertEqual(output_paths[0].parent, output_paths[1].parent)
-            self.assertEqual(output_paths[0], output_paths[1])
-            self.assertEqual(input_paths[0].name, "input.png")
-            self.assertEqual(output_paths[0].name, "realcugan.png")
-            self.assertEqual(artifact_paths[0].name, "encoded.jpg")
-            self.assertEqual(artifact_paths[1].name, "encoded.jpg")
+            self.assertNotEqual(output_paths[0], output_paths[1])
+            self.assertTrue(input_paths[0].name.endswith("-input.png"))
+            self.assertTrue(input_paths[1].name.endswith("-input.png"))
+            self.assertTrue(output_paths[0].name.endswith("-realcugan.png"))
+            self.assertTrue(output_paths[1].name.endswith("-realcugan.png"))
+            self.assertTrue(artifact_paths[0].name.endswith("-encoded.jpg"))
+            self.assertTrue(artifact_paths[1].name.endswith("-encoded.jpg"))
             self.assertFalse(input_paths[0].exists())
+            self.assertFalse(input_paths[1].exists())
             self.assertFalse(output_paths[0].exists())
             self.assertFalse(output_paths[1].exists())
 
@@ -537,7 +547,7 @@ class TestRealCuganUpscaleEngine(unittest.TestCase):
                 command = runner.call_args.args[0]
                 actual_input_path = Path(command[command.index("-i") + 1])
                 self.assertNotEqual(actual_input_path, input_path)
-                self.assertEqual(actual_input_path.name, "input.png")
+                self.assertTrue(actual_input_path.name.endswith("-input.png"))
                 self._assert_artifact_image(artifact, (4, 4), "PNG")
             finally:
                 artifact.cleanup()
