@@ -1,6 +1,7 @@
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 from PySide6.QtCore import QSettings
 
@@ -39,6 +40,33 @@ class TestQtApplicationSettings(unittest.TestCase):
             # Assert
             self.assertTrue(reloaded.load_auto_sizing_enabled())
             self.assertFalse(reloaded.load_append_output_suffix())
+
+    def test_load_returns_default_and_logs_when_qsettings_reports_error(self) -> None:
+        # Arrange
+        settings = MagicMock(spec=QSettings)
+        settings.value.return_value = True
+        settings.status.return_value = QSettings.Status.FormatError
+        subject = QtApplicationSettings(settings)
+
+        # Act / Assert
+        with patch("src.infrastructure.settings.qt_application_settings._LOGGER") as logger:
+            self.assertFalse(subject.load_auto_sizing_enabled())
+            logger.warning.assert_called_once()
+
+    def test_save_logs_when_qsettings_reports_error(self) -> None:
+        # Arrange
+        settings = MagicMock(spec=QSettings)
+        settings.status.return_value = QSettings.Status.AccessError
+        subject = QtApplicationSettings(settings)
+
+        # Act
+        with patch("src.infrastructure.settings.qt_application_settings._LOGGER") as logger:
+            subject.save_auto_sizing_enabled(False)
+
+        # Assert
+        settings.setValue.assert_called_once_with("ui/auto_sizing_enabled", False)
+        settings.sync.assert_called_once_with()
+        logger.warning.assert_called_once()
 
 
 if __name__ == "__main__":

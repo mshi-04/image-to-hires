@@ -116,6 +116,19 @@ class TestMainWindow(unittest.TestCase):
         self.assertFalse(window.settings_widget.scale_combo.isEnabled())
         window.close()
 
+    def test_loading_persisted_settings_does_not_re_save_values(self) -> None:
+        # Arrange
+        self.window.close()
+        persisted_settings = FakeApplicationSettings(auto_sizing_enabled=True)
+
+        # Act
+        window = MainWindow(batch_usecase=FakeBatchUseCase(), app_settings=persisted_settings)
+
+        # Assert
+        self.assertEqual(persisted_settings.saved_auto_sizing_values, [])
+        self.assertEqual(persisted_settings.saved_append_output_suffix_values, [])
+        window.close()
+
     def test_auto_sizing_toggle_persists_setting(self) -> None:
         # Arrange
 

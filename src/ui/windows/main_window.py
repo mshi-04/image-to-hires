@@ -36,8 +36,8 @@ class MainWindow(QMainWindow):
         self._app_settings = app_settings
 
         self._build_ui()
-        self._bind_events()
         self._load_persisted_settings()
+        self._bind_events()
         self._update_start_button_state()
 
     def _build_ui(self) -> None:

@@ -446,6 +446,10 @@ class TestDomainServicesAndUseCase(unittest.TestCase):
         self.assertEqual(result.failure_count, 1)
         self.assertTrue(result.items[0].is_success)
         self.assertFalse(result.items[1].is_success)
+        self.assertIsInstance(result.items[1].error, RuntimeError)
+        self.assertEqual(str(result.items[1].error), "failed to read image size")
+        self.assertEqual(result.items[1].input_image_path, input_paths[1])
+        self.assertIsNone(result.items[1].output_image_path)
         self.assertEqual(fake_engine.calls, [(input_paths[0], 2, 0, Path("C:/images/ok-denoise0x-up2x.png"))])
 
     def test_run_upscale_batch_usecase_uses_same_resolved_name_for_failed_item_after_auto_sizing(self) -> None:
