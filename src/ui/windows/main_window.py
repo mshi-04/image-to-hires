@@ -4,6 +4,7 @@ from PySide6.QtCore import QThread, Slot
 from PySide6.QtGui import QCloseEvent
 from PySide6.QtWidgets import QHBoxLayout, QMainWindow, QMessageBox, QPushButton, QVBoxLayout, QWidget
 
+from src.domain.ports.application_settings_port import ApplicationSettingsPort
 from src.domain.usecase.run_upscale_batch_usecase import RunUpscaleBatchUseCase
 from src.ui.workers.upscale_queue_worker import UpscaleQueueWorker
 from src.ui.styles import MAIN_WINDOW_STYLESHEET
@@ -17,7 +18,11 @@ from src.ui.components.queue_widget import QueueWidget
 class MainWindow(QMainWindow):
     """Refactored main controller window, orchestrating extracted child components."""
 
-    def __init__(self, batch_usecase: RunUpscaleBatchUseCase) -> None:
+    def __init__(
+        self,
+        batch_usecase: RunUpscaleBatchUseCase,
+        app_settings: ApplicationSettingsPort,
+    ) -> None:
         super().__init__()
         self.setWindowTitle("Image To Hires")
         self.setMinimumSize(850, 700)
@@ -28,8 +33,10 @@ class MainWindow(QMainWindow):
         self._worker: UpscaleQueueWorker | None = None
 
         self._batch_usecase = batch_usecase
+        self._app_settings = app_settings
 
         self._build_ui()
+        self._load_persisted_settings()
         self._bind_events()
         self._update_start_button_state()
 
@@ -86,6 +93,7 @@ class MainWindow(QMainWindow):
     def _bind_events(self) -> None:
         self.input_area.files_selected.connect(self._on_files_selected)
         self.start_button.clicked.connect(self._on_start_clicked)
+        self.settings_widget.auto_sizing_checkbox.toggled.connect(self._on_auto_sizing_toggled)
 
     @Slot(list)
     def _on_files_selected(self, files: list[Path]) -> None:
@@ -100,10 +108,11 @@ class MainWindow(QMainWindow):
 
         denoise_level = self.settings_widget.get_denoise_level()
         scale_factor = self.settings_widget.get_scale_factor()
+        auto_sizing_enabled = self.settings_widget.is_auto_sizing_enabled()
 
-        self._start_worker(denoise_level, scale_factor)
+        self._start_worker(denoise_level, scale_factor, auto_sizing_enabled)
 
-    def _start_worker(self, denoise_level: int, scale_factor: int) -> None:
+    def _start_worker(self, denoise_level: int, scale_factor: int, auto_sizing_enabled: bool) -> None:
         if self._worker_thread is not None:
             return
 
@@ -118,6 +127,7 @@ class MainWindow(QMainWindow):
             input_files=list(self._selected_files),
             denoise_level=denoise_level,
             scale_factor=scale_factor,
+            auto_sizing_enabled=auto_sizing_enabled,
         )
         thread = QThread(self)
         worker.moveToThread(thread)
@@ -183,6 +193,13 @@ class MainWindow(QMainWindow):
     def _update_start_button_state(self) -> None:
         can_start = bool(self._selected_files) and not self._is_running and self._worker_thread is None
         self.start_button.setEnabled(can_start)
+
+    @Slot(bool)
+    def _on_auto_sizing_toggled(self, enabled: bool) -> None:
+        self._app_settings.save_auto_sizing_enabled(enabled)
+
+    def _load_persisted_settings(self) -> None:
+        self.settings_widget.set_auto_sizing_enabled(self._app_settings.load_auto_sizing_enabled())
 
     def closeEvent(self, event: QCloseEvent) -> None:
         if self._worker_thread is not None and self._worker_thread.isRunning():

@@ -1,5 +1,5 @@
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QComboBox, QFormLayout, QLabel, QWidget
+from PySide6.QtWidgets import QCheckBox, QComboBox, QFormLayout, QLabel, QWidget
 
 
 class SettingsWidget(QWidget):
@@ -19,10 +19,15 @@ class SettingsWidget(QWidget):
         denoise_label.setObjectName("fieldLabel")
         layout.addRow(denoise_label, self.denoise_combo)
 
+        self.auto_sizing_checkbox = QCheckBox("自動サイジング")
+        self.auto_sizing_checkbox.toggled.connect(self._sync_scale_combo_state)
+        layout.addRow("", self.auto_sizing_checkbox)
+
         self.scale_combo = self._build_combo_box([("2倍", 2), ("3倍", 3), ("4倍", 4)])
         scale_label = QLabel("拡大率:")
         scale_label.setObjectName("fieldLabel")
         layout.addRow(scale_label, self.scale_combo)
+        self._sync_scale_combo_state(self.auto_sizing_checkbox.isChecked())
 
     @staticmethod
     def _build_combo_box(values: list[tuple[str, object]]) -> QComboBox:
@@ -39,6 +44,17 @@ class SettingsWidget(QWidget):
     def get_scale_factor(self) -> int:
         return int(self.scale_combo.currentData())
 
+    def is_auto_sizing_enabled(self) -> bool:
+        return self.auto_sizing_checkbox.isChecked()
+
+    def set_auto_sizing_enabled(self, enabled: bool) -> None:
+        self.auto_sizing_checkbox.setChecked(enabled)
+        self._sync_scale_combo_state(enabled)
+
     def set_inputs_enabled(self, enabled: bool) -> None:
         self.denoise_combo.setEnabled(enabled)
-        self.scale_combo.setEnabled(enabled)
+        self.auto_sizing_checkbox.setEnabled(enabled)
+        self.scale_combo.setEnabled(enabled and not self.auto_sizing_checkbox.isChecked())
+
+    def _sync_scale_combo_state(self, auto_sizing_enabled: bool) -> None:
+        self.scale_combo.setEnabled(not auto_sizing_enabled)
