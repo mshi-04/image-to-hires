@@ -22,7 +22,7 @@ if (-not (Test-Path -LiteralPath $realcuganModelsDir -PathType Container)) {
 
 Push-Location $repoRoot
 try {
-    python -m PyInstaller --clean --noconfirm --distpath dist --workpath build $specPath
+    python -m PyInstaller --noconfirm --distpath dist --workpath build $specPath
 }
 finally {
     Pop-Location

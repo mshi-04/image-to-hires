@@ -5,7 +5,7 @@
 ### 採用候補
 
 - 言語: Python 3 系
-- GUI: PySide6
+- GUI: PySide6 (Material風スタイル適用として qt-material のライトテーマを使用)
 - 推論: Real-CUGAN (外部 CLI 呼び出し) + PyTorch + CUDA (将来的または一部処理)
 - 画像入出力: Pillow
 - 配列処理: NumPy
