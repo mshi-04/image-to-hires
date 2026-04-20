@@ -19,16 +19,29 @@ from src.ui.workers.upscale_queue_worker import UpscaleQueueWorker
 
 
 class FakeApplicationSettings(ApplicationSettingsPort):
-    def __init__(self, auto_sizing_enabled: bool = False) -> None:
+    def __init__(
+        self,
+        auto_sizing_enabled: bool = False,
+        append_output_suffix: bool = True,
+    ) -> None:
         self.auto_sizing_enabled = auto_sizing_enabled
-        self.saved_values: list[bool] = []
+        self.append_output_suffix = append_output_suffix
+        self.saved_auto_sizing_values: list[bool] = []
+        self.saved_append_output_suffix_values: list[bool] = []
 
     def load_auto_sizing_enabled(self) -> bool:
         return self.auto_sizing_enabled
 
     def save_auto_sizing_enabled(self, enabled: bool) -> None:
         self.auto_sizing_enabled = enabled
-        self.saved_values.append(enabled)
+        self.saved_auto_sizing_values.append(enabled)
+
+    def load_append_output_suffix(self) -> bool:
+        return self.append_output_suffix
+
+    def save_append_output_suffix(self, enabled: bool) -> None:
+        self.append_output_suffix = enabled
+        self.saved_append_output_suffix_values.append(enabled)
 
 
 class FakeBatchUseCase:
@@ -86,18 +99,20 @@ class TestMainWindow(unittest.TestCase):
         # Assert
         self.assertFalse(self.window.start_button.isEnabled())
         self.assertFalse(self.window.settings_widget.is_auto_sizing_enabled())
+        self.assertTrue(self.window.settings_widget.should_append_output_suffix())
         self.assertTrue(self.window.settings_widget.scale_combo.isEnabled())
 
-    def test_load_persisted_settings_restores_auto_sizing_checkbox(self) -> None:
+    def test_load_persisted_settings_restores_checkbox_states(self) -> None:
         # Arrange
         self.window.close()
-        persisted_settings = FakeApplicationSettings(auto_sizing_enabled=True)
+        persisted_settings = FakeApplicationSettings(auto_sizing_enabled=True, append_output_suffix=False)
 
         # Act
         window = MainWindow(batch_usecase=FakeBatchUseCase(), app_settings=persisted_settings)
 
         # Assert
         self.assertTrue(window.settings_widget.is_auto_sizing_enabled())
+        self.assertFalse(window.settings_widget.should_append_output_suffix())
         self.assertFalse(window.settings_widget.scale_combo.isEnabled())
         window.close()
 
@@ -109,7 +124,17 @@ class TestMainWindow(unittest.TestCase):
         self.window.settings_widget.set_auto_sizing_enabled(False)
 
         # Assert
-        self.assertEqual(self.app_settings.saved_values[-2:], [True, False])
+        self.assertEqual(self.app_settings.saved_auto_sizing_values[-2:], [True, False])
+
+    def test_append_output_suffix_toggle_persists_setting(self) -> None:
+        # Arrange
+
+        # Act
+        self.window.settings_widget.set_append_output_suffix(False)
+        self.window.settings_widget.set_append_output_suffix(True)
+
+        # Assert
+        self.assertEqual(self.app_settings.saved_append_output_suffix_values[-2:], [False, True])
 
     def test_on_files_selected_enables_start_button(self) -> None:
         # Arrange
@@ -125,13 +150,14 @@ class TestMainWindow(unittest.TestCase):
         # Arrange
         self.window._on_files_selected([Path("C:/images/a.png")])
         self.window.settings_widget.set_auto_sizing_enabled(True)
+        self.window.settings_widget.set_append_output_suffix(False)
 
         # Act
         with patch.object(self.window, "_start_worker") as start_worker:
             self.window._on_start_clicked()
 
         # Assert
-        start_worker.assert_called_once_with(-1, 2, True)
+        start_worker.assert_called_once_with(-1, 2, True, False)
 
     def test_worker_passes_auto_sizing_flag_to_command(self) -> None:
         # Arrange
@@ -141,6 +167,7 @@ class TestMainWindow(unittest.TestCase):
             denoise_level=1,
             scale_factor=4,
             auto_sizing_enabled=True,
+            append_output_suffix=False,
         )
 
         # Act
@@ -151,6 +178,7 @@ class TestMainWindow(unittest.TestCase):
         self.assertEqual(self.batch_usecase.last_command.denoise_level, 1)
         self.assertEqual(self.batch_usecase.last_command.scale_factor, 4)
         self.assertTrue(self.batch_usecase.last_command.auto_sizing_enabled)
+        self.assertFalse(self.batch_usecase.last_command.append_output_suffix)
 
 
 if __name__ == "__main__":

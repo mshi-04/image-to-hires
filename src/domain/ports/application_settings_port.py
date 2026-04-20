@@ -9,3 +9,9 @@ class ApplicationSettingsPort(Protocol):
 
     def save_auto_sizing_enabled(self, enabled: bool) -> None:
         """Persist the auto-sizing preference."""
+
+    def load_append_output_suffix(self) -> bool:
+        """Return the persisted output suffix preference."""
+
+    def save_append_output_suffix(self, enabled: bool) -> None:
+        """Persist the output suffix preference."""

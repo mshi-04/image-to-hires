@@ -20,6 +20,7 @@ class RunUpscaleCommand:
     scale_factor: int
     denoise_level: int
     auto_sizing_enabled: bool = False
+    append_output_suffix: bool = True
     output_image_path: Path | str | None = None
 
 
@@ -46,6 +47,10 @@ class RunUpscaleUseCase:
         self._image_size_reader = image_size_reader
 
     def execute(self, command: RunUpscaleCommand) -> RunUpscaleResult:
+        job = self.prepare_job(command)
+        return self.execute_job(job)
+
+    def prepare_job(self, command: RunUpscaleCommand) -> UpscaleJob:
         input_image = InputImagePath(Path(command.input_image_path))
         fallback_scale_factor = ScaleFactor(command.scale_factor)
         scale_factor = self._resolve_scale_factor(
@@ -58,16 +63,18 @@ class RunUpscaleUseCase:
             input_image=input_image,
             scale_factor=scale_factor,
             denoise_level=denoise_level,
+            append_output_suffix=command.append_output_suffix,
             output_image_path=command.output_image_path,
         )
 
-        job = UpscaleJob(
+        return UpscaleJob(
             input_image=input_image,
             output_image=output_image,
             scale_factor=scale_factor,
             denoise_level=denoise_level,
         )
 
+    def execute_job(self, job: UpscaleJob) -> RunUpscaleResult:
         generated_artifact = self._upscale_engine.upscale(job)
         self._image_storage.save(generated_artifact, job.output_image)
 

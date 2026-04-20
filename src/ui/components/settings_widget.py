@@ -23,6 +23,10 @@ class SettingsWidget(QWidget):
         self.auto_sizing_checkbox.toggled.connect(self._sync_scale_combo_state)
         layout.addRow("", self.auto_sizing_checkbox)
 
+        self.append_output_suffix_checkbox = QCheckBox("サフィックスを付ける")
+        self.append_output_suffix_checkbox.setChecked(True)
+        layout.addRow("", self.append_output_suffix_checkbox)
+
         self.scale_combo = self._build_combo_box([("2倍", 2), ("3倍", 3), ("4倍", 4)])
         scale_label = QLabel("拡大率:")
         scale_label.setObjectName("fieldLabel")
@@ -51,9 +55,16 @@ class SettingsWidget(QWidget):
         self.auto_sizing_checkbox.setChecked(enabled)
         self._sync_scale_combo_state(enabled)
 
+    def should_append_output_suffix(self) -> bool:
+        return self.append_output_suffix_checkbox.isChecked()
+
+    def set_append_output_suffix(self, enabled: bool) -> None:
+        self.append_output_suffix_checkbox.setChecked(enabled)
+
     def set_inputs_enabled(self, enabled: bool) -> None:
         self.denoise_combo.setEnabled(enabled)
         self.auto_sizing_checkbox.setEnabled(enabled)
+        self.append_output_suffix_checkbox.setEnabled(enabled)
         self.scale_combo.setEnabled(enabled and not self.auto_sizing_checkbox.isChecked())
 
     def _sync_scale_combo_state(self, auto_sizing_enabled: bool) -> None:

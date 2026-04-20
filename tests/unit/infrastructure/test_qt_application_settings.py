@@ -23,6 +23,7 @@ class TestQtApplicationSettings(unittest.TestCase):
 
             # Assert
             self.assertFalse(settings.load_auto_sizing_enabled())
+            self.assertTrue(settings.load_append_output_suffix())
 
     def test_save_and_load_round_trip(self) -> None:
         # Arrange
@@ -32,10 +33,12 @@ class TestQtApplicationSettings(unittest.TestCase):
             # Act
             settings = self._build_settings(settings_root)
             settings.save_auto_sizing_enabled(True)
+            settings.save_append_output_suffix(False)
             reloaded = self._build_settings(settings_root)
 
             # Assert
             self.assertTrue(reloaded.load_auto_sizing_enabled())
+            self.assertFalse(reloaded.load_append_output_suffix())
 
 
 if __name__ == "__main__":
