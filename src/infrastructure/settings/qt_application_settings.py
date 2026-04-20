@@ -1,6 +1,11 @@
+import logging
+
 from PySide6.QtCore import QSettings
 
 from src.domain.ports.application_settings_port import ApplicationSettingsPort
+
+
+_LOGGER = logging.getLogger(__name__)
 
 
 class QtApplicationSettings(ApplicationSettingsPort):
@@ -14,15 +19,23 @@ class QtApplicationSettings(ApplicationSettingsPort):
         self._settings = settings or QSettings(self._ORGANIZATION, self._APPLICATION)
 
     def load_auto_sizing_enabled(self) -> bool:
-        try:
-            value = self._settings.value(self._AUTO_SIZING_KEY, False, type=bool)
-        except Exception:
+        value = self._settings.value(self._AUTO_SIZING_KEY, False, type=bool)
+        if self._settings.status() != QSettings.Status.NoError:
+            _LOGGER.warning(
+                "Failed to load setting '%s': status=%s",
+                self._AUTO_SIZING_KEY,
+                self._settings.status().name,
+            )
             return False
         return bool(value)
 
     def save_auto_sizing_enabled(self, enabled: bool) -> None:
-        try:
-            self._settings.setValue(self._AUTO_SIZING_KEY, bool(enabled))
-            self._settings.sync()
-        except Exception:
-            return
+        self._settings.setValue(self._AUTO_SIZING_KEY, bool(enabled))
+        self._settings.sync()
+        if self._settings.status() != QSettings.Status.NoError:
+            _LOGGER.warning(
+                "Failed to save setting '%s'=%s: status=%s",
+                self._AUTO_SIZING_KEY,
+                bool(enabled),
+                self._settings.status().name,
+            )
