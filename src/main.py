@@ -7,7 +7,6 @@ from src.infrastructure.image_io.file_image_storage import FileImageStorage
 from src.infrastructure.inference.realcugan_upscale_engine import RealCuganUpscaleEngine
 from src.ui.windows.main_window import MainWindow
 
-
 def main() -> int:
     app = QApplication(sys.argv)
     batch_usecase = RunUpscaleBatchUseCase(
