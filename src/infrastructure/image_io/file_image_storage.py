@@ -1,10 +1,20 @@
 import ctypes
+import logging
 import os
 from pathlib import Path
 
 from src.domain.entities.generated_image_artifact import FileMetadataPreservation, GeneratedImageArtifact
 from src.domain.ports.image_storage_port import ImageStoragePort
 from src.domain.value_objects.image_path import OutputImagePath
+
+logger = logging.getLogger(__name__)
+
+
+class _FileTime(ctypes.Structure):
+    _fields_ = [
+        ("dwLowDateTime", ctypes.c_uint32),
+        ("dwHighDateTime", ctypes.c_uint32),
+    ]
 
 
 class FileImageStorage(ImageStoragePort):
@@ -19,7 +29,10 @@ class FileImageStorage(ImageStoragePort):
             output_path = Path(output_image.value)
             output_path.parent.mkdir(parents=True, exist_ok=True)
             os.replace(temporary_path, output_path)
-            self._apply_preserved_file_metadata(output_path, artifact.metadata_preservation)
+            try:
+                self._apply_preserved_file_metadata(output_path, artifact.metadata_preservation)
+            except (OSError, PermissionError) as exc:
+                logger.warning("Failed to preserve file metadata for %s: %s", output_path, exc)
         finally:
             artifact.cleanup()
 
@@ -57,13 +70,16 @@ class FileImageStorage(ImageStoragePort):
         file_handle = FileImageStorage._open_file_handle_for_timestamp_write(output_path)
         try:
             filetime = FileImageStorage._timestamp_to_filetime(creation_timestamp)
-            if not ctypes.windll.kernel32.SetFileTime(file_handle, ctypes.byref(filetime), None, None):
+            set_file_time = ctypes.windll.kernel32.SetFileTime
+            if not set_file_time(file_handle, ctypes.byref(filetime), None, None):
                 raise OSError("Failed to copy file creation time.")
         finally:
-            ctypes.windll.kernel32.CloseHandle(file_handle)
+            close_handle = ctypes.windll.kernel32.CloseHandle
+            close_handle(file_handle)
 
     @staticmethod
-    def _open_file_handle_for_timestamp_write(path: Path) -> int:
+    def _open_file_handle_for_timestamp_write(path: Path) -> ctypes.c_void_p:
+        kernel32 = ctypes.windll.kernel32
         create_file = ctypes.windll.kernel32.CreateFileW
         create_file.argtypes = [
             ctypes.c_wchar_p,
@@ -75,6 +91,15 @@ class FileImageStorage(ImageStoragePort):
             ctypes.c_void_p,
         ]
         create_file.restype = ctypes.c_void_p
+        kernel32.SetFileTime.argtypes = [
+            ctypes.c_void_p,
+            ctypes.POINTER(_FileTime),
+            ctypes.c_void_p,
+            ctypes.c_void_p,
+        ]
+        kernel32.SetFileTime.restype = ctypes.c_int
+        kernel32.CloseHandle.argtypes = [ctypes.c_void_p]
+        kernel32.CloseHandle.restype = ctypes.c_int
         handle = create_file(
             str(path),
             0x0100,  # FILE_WRITE_ATTRIBUTES
@@ -89,15 +114,9 @@ class FileImageStorage(ImageStoragePort):
         return handle
 
     @staticmethod
-    def _timestamp_to_filetime(timestamp: float) -> ctypes.Structure:
-        class FILETIME(ctypes.Structure):
-            _fields_ = [
-                ("dwLowDateTime", ctypes.c_uint32),
-                ("dwHighDateTime", ctypes.c_uint32),
-            ]
-
+    def _timestamp_to_filetime(timestamp: float) -> _FileTime:
         filetime_value = int(timestamp * 10_000_000) + 116_444_736_000_000_000
-        return FILETIME(
+        return _FileTime(
             dwLowDateTime=filetime_value & 0xFFFFFFFF,
             dwHighDateTime=(filetime_value >> 32) & 0xFFFFFFFF,
         )

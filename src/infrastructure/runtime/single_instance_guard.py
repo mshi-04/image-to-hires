@@ -42,6 +42,15 @@ class SingleInstanceGuard(QObject):
             self._is_primary_instance = False
             return False
 
+        if self._server.listen(self._server_name):
+            self._server.newConnection.connect(self._on_new_connection)
+            self._is_primary_instance = True
+            return True
+
+        if self._notify_existing_instance():
+            self._is_primary_instance = False
+            return False
+
         QLocalServer.removeServer(self._server_name)
 
         if not self._server.listen(self._server_name):

@@ -53,10 +53,51 @@ class TestSingleInstanceGuard(unittest.TestCase):
         guard = self._create_guard()
 
         with patch("src.infrastructure.runtime.single_instance_guard.QLocalServer.removeServer") as remove_server:
-            with patch.object(guard, "_notify_existing_instance", side_effect=[False]):
-                self.assertTrue(guard.start_or_notify())
+            with patch.object(guard._server, "listen", side_effect=[False, True]):
+                with patch.object(guard, "_notify_existing_instance", side_effect=[False, False]):
+                    self.assertTrue(guard.start_or_notify())
 
         remove_server.assert_called_once_with(self.server_name)
+
+    def test_start_or_notify_skips_remove_server_when_notify_succeeds(self) -> None:
+        guard = self._create_guard()
+
+        with patch("src.infrastructure.runtime.single_instance_guard.QLocalServer.removeServer") as remove_server:
+            with patch.object(guard._server, "listen", return_value=False):
+                with patch.object(guard, "_notify_existing_instance", return_value=True):
+                    self.assertFalse(guard.start_or_notify())
+
+        remove_server.assert_not_called()
+
+    def test_start_or_notify_checks_notify_before_removing_stale_server(self) -> None:
+        guard = self._create_guard()
+        events: list[str] = []
+
+        def notify_side_effect() -> bool:
+            events.append("notify")
+            return False
+
+        def listen_side_effect(name: str) -> bool:
+            events.append(f"listen:{name}")
+            return False
+
+        with patch("src.infrastructure.runtime.single_instance_guard.QLocalServer.removeServer", side_effect=lambda name: events.append(f"remove:{name}")):
+            with patch.object(guard._server, "listen", side_effect=listen_side_effect):
+                with patch.object(guard, "_notify_existing_instance", side_effect=notify_side_effect):
+                    with self.assertRaises(RuntimeError):
+                        guard.start_or_notify()
+
+        self.assertEqual(
+            events,
+            [
+                "notify",
+                f"listen:{self.server_name}",
+                "notify",
+                f"remove:{self.server_name}",
+                f"listen:{self.server_name}",
+                "notify",
+            ],
+        )
 
     def test_activation_message_emits_signal(self) -> None:
         guard = self._create_guard()
