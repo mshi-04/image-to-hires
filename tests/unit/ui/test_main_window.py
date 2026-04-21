@@ -23,11 +23,14 @@ class FakeApplicationSettings(ApplicationSettingsPort):
         self,
         auto_sizing_enabled: bool = False,
         append_output_suffix: bool = True,
+        last_selected_directory: str | None = None,
     ) -> None:
         self.auto_sizing_enabled = auto_sizing_enabled
         self.append_output_suffix = append_output_suffix
+        self.last_selected_directory = last_selected_directory
         self.saved_auto_sizing_values: list[bool] = []
         self.saved_append_output_suffix_values: list[bool] = []
+        self.saved_last_selected_directory_values: list[str] = []
 
     def load_auto_sizing_enabled(self) -> bool:
         return self.auto_sizing_enabled
@@ -42,6 +45,13 @@ class FakeApplicationSettings(ApplicationSettingsPort):
     def save_append_output_suffix(self, enabled: bool) -> None:
         self.append_output_suffix = enabled
         self.saved_append_output_suffix_values.append(enabled)
+
+    def load_last_selected_directory(self) -> str | None:
+        return self.last_selected_directory
+
+    def save_last_selected_directory(self, directory: str) -> None:
+        self.last_selected_directory = directory
+        self.saved_last_selected_directory_values.append(directory)
 
 
 class FakeBatchUseCase:
@@ -105,7 +115,11 @@ class TestMainWindow(unittest.TestCase):
     def test_load_persisted_settings_restores_checkbox_states(self) -> None:
         # Arrange
         self.window.close()
-        persisted_settings = FakeApplicationSettings(auto_sizing_enabled=True, append_output_suffix=False)
+        persisted_settings = FakeApplicationSettings(
+            auto_sizing_enabled=True,
+            append_output_suffix=False,
+            last_selected_directory="C:/images",
+        )
 
         # Act
         window = MainWindow(batch_usecase=FakeBatchUseCase(), app_settings=persisted_settings)
@@ -113,7 +127,10 @@ class TestMainWindow(unittest.TestCase):
         # Assert
         self.assertTrue(window.settings_widget.is_auto_sizing_enabled())
         self.assertFalse(window.settings_widget.should_append_output_suffix())
+        self.assertEqual(window.settings_widget.get_denoise_level(), 3)
+        self.assertFalse(window.settings_widget.denoise_combo.isEnabled())
         self.assertFalse(window.settings_widget.scale_combo.isEnabled())
+        self.assertEqual(Path(window.input_area._initial_directory), Path("C:/images"))
         window.close()
 
     def test_loading_persisted_settings_does_not_re_save_values(self) -> None:
@@ -127,7 +144,15 @@ class TestMainWindow(unittest.TestCase):
         # Assert
         self.assertEqual(persisted_settings.saved_auto_sizing_values, [])
         self.assertEqual(persisted_settings.saved_append_output_suffix_values, [])
+        self.assertEqual(persisted_settings.saved_last_selected_directory_values, [])
         window.close()
+
+    def test_last_selected_directory_is_persisted_when_notified(self) -> None:
+        # Arrange / Act
+        self.window._on_last_directory_selected("C:/images/last")
+
+        # Assert
+        self.assertEqual(self.app_settings.saved_last_selected_directory_values, ["C:/images/last"])
 
     def test_auto_sizing_toggle_persists_setting(self) -> None:
         # Arrange
@@ -138,6 +163,24 @@ class TestMainWindow(unittest.TestCase):
 
         # Assert
         self.assertEqual(self.app_settings.saved_auto_sizing_values[-2:], [True, False])
+
+    def test_auto_sizing_locks_denoise_to_three_and_restores_previous_value(self) -> None:
+        # Arrange
+        self.window.settings_widget.denoise_combo.setCurrentIndex(
+            self.window.settings_widget.denoise_combo.findData(1)
+        )
+
+        # Act
+        self.window.settings_widget.set_auto_sizing_enabled(True)
+        denoise_locked_value = self.window.settings_widget.get_denoise_level()
+        denoise_locked_enabled = self.window.settings_widget.denoise_combo.isEnabled()
+        self.window.settings_widget.set_auto_sizing_enabled(False)
+
+        # Assert
+        self.assertEqual(denoise_locked_value, 3)
+        self.assertFalse(denoise_locked_enabled)
+        self.assertEqual(self.window.settings_widget.get_denoise_level(), 1)
+        self.assertTrue(self.window.settings_widget.denoise_combo.isEnabled())
 
     def test_append_output_suffix_toggle_persists_setting(self) -> None:
         # Arrange
@@ -170,7 +213,7 @@ class TestMainWindow(unittest.TestCase):
             self.window._on_start_clicked()
 
         # Assert
-        start_worker.assert_called_once_with(-1, 2, True, False)
+        start_worker.assert_called_once_with(3, 2, True, False)
 
     def test_worker_passes_auto_sizing_flag_to_command(self) -> None:
         # Arrange
@@ -192,6 +235,34 @@ class TestMainWindow(unittest.TestCase):
         self.assertEqual(self.batch_usecase.last_command.scale_factor, 4)
         self.assertTrue(self.batch_usecase.last_command.auto_sizing_enabled)
         self.assertFalse(self.batch_usecase.last_command.append_output_suffix)
+
+    def test_activate_from_secondary_launch_restores_window_from_minimized_state(self) -> None:
+        # Arrange
+        self.window.show()
+        self.window.showMinimized()
+        self.__class__._app.processEvents()
+
+        # Act
+        self.window.activate_from_secondary_launch()
+        self.__class__._app.processEvents()
+
+        # Assert
+        self.assertFalse(self.window.isMinimized())
+        self.assertTrue(self.window.isVisible())
+
+    def test_activate_from_secondary_launch_preserves_current_state(self) -> None:
+        # Arrange
+        selected_files = [Path("C:/images/a.png"), Path("C:/images/b.png")]
+        self.window._on_files_selected(selected_files)
+        self.window._is_running = True
+
+        # Act
+        self.window.activate_from_secondary_launch()
+
+        # Assert
+        self.assertTrue(self.window._is_running)
+        self.assertEqual(self.window._selected_files, selected_files)
+        self.assertEqual(self.window.queue_widget.file_list_widget.count(), len(selected_files))
 
 
 if __name__ == "__main__":
