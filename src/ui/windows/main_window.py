@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from PySide6.QtCore import QThread, Slot
-from PySide6.QtGui import QCloseEvent
+from PySide6.QtGui import QCloseEvent, Qt
 from PySide6.QtWidgets import QHBoxLayout, QMainWindow, QMessageBox, QPushButton, QVBoxLayout, QWidget
 
 from src.domain.ports.application_settings_port import ApplicationSettingsPort
@@ -92,6 +92,7 @@ class MainWindow(QMainWindow):
 
     def _bind_events(self) -> None:
         self.input_area.files_selected.connect(self._on_files_selected)
+        self.input_area.last_directory_selected.connect(self._on_last_directory_selected)
         self.start_button.clicked.connect(self._on_start_clicked)
         self.settings_widget.auto_sizing_checkbox.toggled.connect(self._on_auto_sizing_toggled)
         self.settings_widget.append_output_suffix_checkbox.toggled.connect(self._on_append_output_suffix_toggled)
@@ -183,8 +184,6 @@ class MainWindow(QMainWindow):
     @Slot(int, int)
     def _on_batch_finished(self, completed_count: int, failed_count: int) -> None:
         self._is_running = False
-        msg = f"すべての処理が完了しました。\n成功: {completed_count}\n失敗: {failed_count}"
-        QMessageBox.information(self, "完了", msg)
 
     @Slot(str)
     def _on_batch_failed(self, message: str) -> None:
@@ -211,9 +210,22 @@ class MainWindow(QMainWindow):
     def _on_append_output_suffix_toggled(self, enabled: bool) -> None:
         self._app_settings.save_append_output_suffix(enabled)
 
+    @Slot(str)
+    def _on_last_directory_selected(self, directory: str) -> None:
+        self._app_settings.save_last_selected_directory(directory)
+
     def _load_persisted_settings(self) -> None:
         self.settings_widget.set_auto_sizing_enabled(self._app_settings.load_auto_sizing_enabled())
         self.settings_widget.set_append_output_suffix(self._app_settings.load_append_output_suffix())
+        self.input_area.set_initial_directory(self._app_settings.load_last_selected_directory())
+
+    @Slot()
+    def activate_from_secondary_launch(self) -> None:
+        if self.windowState() & Qt.WindowState.WindowMinimized:
+            self.setWindowState(self.windowState() & ~Qt.WindowState.WindowMinimized)
+        self.show()
+        self.raise_()
+        self.activateWindow()
 
     def closeEvent(self, event: QCloseEvent) -> None:
         if self._worker_thread is not None and self._worker_thread.isRunning():

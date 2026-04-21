@@ -25,6 +25,7 @@ class TestQtApplicationSettings(unittest.TestCase):
             # Assert
             self.assertFalse(settings.load_auto_sizing_enabled())
             self.assertTrue(settings.load_append_output_suffix())
+            self.assertIsNone(settings.load_last_selected_directory())
 
     def test_save_and_load_round_trip(self) -> None:
         # Arrange
@@ -35,11 +36,13 @@ class TestQtApplicationSettings(unittest.TestCase):
             settings = self._build_settings(settings_root)
             settings.save_auto_sizing_enabled(True)
             settings.save_append_output_suffix(False)
+            settings.save_last_selected_directory("C:/images")
             reloaded = self._build_settings(settings_root)
 
             # Assert
             self.assertTrue(reloaded.load_auto_sizing_enabled())
             self.assertFalse(reloaded.load_append_output_suffix())
+            self.assertEqual(reloaded.load_last_selected_directory(), "C:/images")
 
     def test_load_returns_default_and_logs_when_qsettings_reports_error(self) -> None:
         # Arrange
@@ -65,6 +68,33 @@ class TestQtApplicationSettings(unittest.TestCase):
 
         # Assert
         settings.setValue.assert_called_once_with("ui/auto_sizing_enabled", False)
+        settings.sync.assert_called_once_with()
+        logger.warning.assert_called_once()
+
+    def test_load_last_selected_directory_returns_none_and_logs_when_qsettings_reports_error(self) -> None:
+        # Arrange
+        settings = MagicMock(spec=QSettings)
+        settings.value.return_value = "C:/images"
+        settings.status.return_value = QSettings.Status.FormatError
+        subject = QtApplicationSettings(settings)
+
+        # Act / Assert
+        with patch("src.infrastructure.settings.qt_application_settings._LOGGER") as logger:
+            self.assertIsNone(subject.load_last_selected_directory())
+            logger.warning.assert_called_once()
+
+    def test_save_last_selected_directory_logs_when_qsettings_reports_error(self) -> None:
+        # Arrange
+        settings = MagicMock(spec=QSettings)
+        settings.status.return_value = QSettings.Status.AccessError
+        subject = QtApplicationSettings(settings)
+
+        # Act
+        with patch("src.infrastructure.settings.qt_application_settings._LOGGER") as logger:
+            subject.save_last_selected_directory("C:/images")
+
+        # Assert
+        settings.setValue.assert_called_once_with("ui/last_selected_directory", "C:/images")
         settings.sync.assert_called_once_with()
         logger.warning.assert_called_once()
 

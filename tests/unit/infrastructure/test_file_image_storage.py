@@ -3,7 +3,7 @@ import unittest
 from unittest import mock
 from pathlib import Path
 
-from src.domain.entities.generated_image_artifact import GeneratedImageArtifact
+from src.domain.entities.generated_image_artifact import FileMetadataPreservation, GeneratedImageArtifact
 from src.domain.value_objects.image_path import OutputImagePath
 from src.infrastructure.image_io.file_image_storage import FileImageStorage
 
@@ -26,6 +26,30 @@ class TestFileImageStorage(unittest.TestCase):
             self.assertTrue(output_path.exists())
             self.assertEqual(output_path.read_bytes(), b"encoded-image")
             self.assertFalse(temp_source.exists())
+
+    def test_save_applies_requested_metadata_preservation(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            source_path = Path(tmp_dir) / "input.png"
+            source_path.write_bytes(b"source")
+            temp_source = Path(tmp_dir) / "work" / "generated.png"
+            temp_source.parent.mkdir(parents=True, exist_ok=True)
+            temp_source.write_bytes(b"encoded-image")
+            output_path = Path(tmp_dir) / "nested" / "result.png"
+            storage = FileImageStorage()
+            artifact = GeneratedImageArtifact(
+                temporary_path=temp_source,
+                cleanup=lambda: None,
+                metadata_preservation=FileMetadataPreservation(
+                    source_path=source_path,
+                    preserve_creation_time=True,
+                    preserve_modified_time=True,
+                ),
+            )
+
+            with mock.patch.object(storage, "_apply_preserved_file_metadata") as apply_metadata:
+                storage.save(artifact, OutputImagePath(output_path))
+
+            apply_metadata.assert_called_once_with(output_path, artifact.metadata_preservation)
 
     def test_save_raises_for_missing_artifact_path(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:

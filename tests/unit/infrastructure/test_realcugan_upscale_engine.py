@@ -206,6 +206,9 @@ class TestRealCuganUpscaleEngine(unittest.TestCase):
             artifact = engine.upscale(self._make_job(input_path, output_path, 4, 0))
 
             self._assert_artifact_image(artifact, (12, 8), "PNG")
+            self.assertEqual(artifact.metadata_preservation.source_path, input_path)
+            self.assertTrue(artifact.metadata_preservation.preserve_creation_time)
+            self.assertTrue(artifact.metadata_preservation.preserve_modified_time)
 
     def test_upscale_returns_jpeg_artifact_when_output_is_jpg(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:

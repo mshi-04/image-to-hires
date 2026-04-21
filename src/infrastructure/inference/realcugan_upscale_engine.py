@@ -6,7 +6,10 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING
 from uuid import uuid4
 
-from src.domain.entities.generated_image_artifact import GeneratedImageArtifact
+from src.domain.entities.generated_image_artifact import (
+    FileMetadataPreservation,
+    GeneratedImageArtifact,
+)
 from src.domain.entities.upscale_job import UpscaleJob
 from src.domain.ports.upscale_engine_port import UpscaleEnginePort
 
@@ -238,6 +241,9 @@ class RealCuganUpscaleEngine(UpscaleEnginePort):
                 return GeneratedImageArtifact(
                     temporary_path=realcugan_output_png,
                     cleanup=self._build_cleanup([*input_temp_files, realcugan_output_png], work_directory),
+                    metadata_preservation=FileMetadataPreservation.preserve_timestamps_from(
+                        job.input_image.value
+                    ),
                 )
 
             with Image.open(realcugan_output_png) as result_image:
@@ -254,6 +260,9 @@ class RealCuganUpscaleEngine(UpscaleEnginePort):
                 temporary_path=encoded_output,
                 cleanup=self._build_cleanup(
                     [*input_temp_files, realcugan_output_png, encoded_output], work_directory
+                ),
+                metadata_preservation=FileMetadataPreservation.preserve_timestamps_from(
+                    job.input_image.value
                 ),
             )
         except Exception:
@@ -280,6 +289,9 @@ class RealCuganUpscaleEngine(UpscaleEnginePort):
             return GeneratedImageArtifact(
                 temporary_path=encoded_output,
                 cleanup=self._build_cleanup([encoded_output], work_directory),
+                metadata_preservation=FileMetadataPreservation.preserve_timestamps_from(
+                    job.input_image.value
+                ),
             )
         except Exception:
             self._cleanup_files([encoded_output])

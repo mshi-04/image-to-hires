@@ -8,9 +8,11 @@ class InputAreaWidget(QWidget):
     """Component for selecting input image files."""
 
     files_selected = Signal(list)  # Emits list[Path]
+    last_directory_selected = Signal(str)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
+        self._initial_directory = ""
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -34,13 +36,16 @@ class InputAreaWidget(QWidget):
         selected_files, _ = QFileDialog.getOpenFileNames(
             self,
             "拡大する画像を選択",
-            "",
+            self._initial_directory,
             "Image Files (*.png *.jpg *.jpeg *.webp)",
         )
         if not selected_files:
             return
 
         paths = [Path(p) for p in selected_files]
+        selected_directory = str(paths[0].parent)
+        self._initial_directory = selected_directory
+        self.last_directory_selected.emit(selected_directory)
         self.update_display(len(paths))
         self.files_selected.emit(paths)
 
@@ -53,3 +58,9 @@ class InputAreaWidget(QWidget):
 
     def set_select_enabled(self, enabled: bool) -> None:
         self.select_button.setEnabled(enabled)
+
+    def set_initial_directory(self, directory: str | None) -> None:
+        if not directory:
+            self._initial_directory = ""
+            return
+        self._initial_directory = str(Path(directory))

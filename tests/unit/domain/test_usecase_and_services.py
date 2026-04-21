@@ -1,7 +1,7 @@
 import unittest
 from pathlib import Path
 
-from src.domain.entities.generated_image_artifact import GeneratedImageArtifact
+from src.domain.entities.generated_image_artifact import FileMetadataPreservation, GeneratedImageArtifact
 from src.domain.entities.upscale_job import UpscaleJob
 from src.domain.ports.image_size_reader_port import ImageSizeReaderPort
 from src.domain.ports.image_storage_port import ImageStoragePort
@@ -52,9 +52,11 @@ class FakeUpscaleEngine(UpscaleEnginePort):
 class FakeImageStorage(ImageStoragePort):
     def __init__(self) -> None:
         self.calls: list[Path] = []
+        self.metadata_preservations: list[FileMetadataPreservation] = []
 
     def save(self, artifact: GeneratedImageArtifact, output_image: OutputImagePath) -> None:  # noqa: ARG002
         self.calls.append(output_image.value)
+        self.metadata_preservations.append(artifact.metadata_preservation)
 
 
 class FakeImageSizeReader(ImageSizeReaderPort):
@@ -201,6 +203,26 @@ class TestDomainServicesAndUseCase(unittest.TestCase):
         self.assertEqual(fake_engine.calls, [(Path("C:/images/input.jpeg"), 3, 1, expected_output)])
         self.assertEqual(fake_storage.calls, [expected_output])
         self.assertEqual(result.output_image_path.value, expected_output)
+
+    def test_run_upscale_usecase_keeps_default_empty_metadata_policy_when_engine_does_not_set_it(self) -> None:
+        # Arrange
+        usecase, _, fake_storage = self._build_usecase()
+
+        # Act
+        usecase.execute(
+            RunUpscaleCommand(
+                input_image_path=Path("C:/images/input.jpeg"),
+                output_image_path=None,
+                scale_factor=3,
+                denoise_level=1,
+            )
+        )
+
+        # Assert
+        self.assertEqual(len(fake_storage.metadata_preservations), 1)
+        self.assertIsNone(fake_storage.metadata_preservations[0].source_path)
+        self.assertFalse(fake_storage.metadata_preservations[0].preserve_creation_time)
+        self.assertFalse(fake_storage.metadata_preservations[0].preserve_modified_time)
 
     def test_run_upscale_usecase_uses_auto_sizing_exact_match_for_output_naming(self) -> None:
         # Arrange
