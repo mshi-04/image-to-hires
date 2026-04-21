@@ -53,6 +53,7 @@ temp/
 .env
 .env.*
 *.local
+.claude/settings.local.json
 
 # Model files and large assets
 bin/realcugan/
