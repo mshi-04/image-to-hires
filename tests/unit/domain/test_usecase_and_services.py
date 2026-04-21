@@ -105,6 +105,46 @@ class TestDomainServicesAndUseCase(unittest.TestCase):
                 # Assert
                 self.assertEqual(output.value, Path(expected))
 
+    def test_build_default_output_path_trims_gemini_prefix_before_applying_rules(self) -> None:
+        # Arrange
+        input_path = InputImagePath(Path("C:/images/Gemini_Generated_Image_re0bwkre0bwkre0b.png"))
+
+        # Act
+        output_without_suffix = build_default_output_path(
+            input_path,
+            ScaleFactor(4),
+            DenoiseLevel(2),
+            append_output_suffix=False,
+        )
+        output_with_suffix = build_default_output_path(
+            input_path,
+            ScaleFactor(4),
+            DenoiseLevel(2),
+            append_output_suffix=True,
+        )
+
+        # Assert
+        self.assertEqual(output_without_suffix.value, Path("C:/images/re0bwkre0bwkre0b.png"))
+        self.assertEqual(
+            output_with_suffix.value,
+            Path("C:/images/re0bwkre0bwkre0b-denoise2x-up4x.png"),
+        )
+
+    def test_build_default_output_path_falls_back_to_suffix_when_disabled_name_would_conflict(self) -> None:
+        # Arrange
+        input_path = InputImagePath(Path("C:/images/cat.png"))
+
+        # Act
+        output = build_default_output_path(
+            input_path,
+            ScaleFactor(2),
+            DenoiseLevel(0),
+            append_output_suffix=False,
+        )
+
+        # Assert
+        self.assertEqual(output.value, Path("C:/images/cat-denoise0x-up2x.png"))
+
     def test_auto_scale_service_uses_exact_matches_and_otherwise_falls_back(self) -> None:
         # Arrange
         fallback = ScaleFactor(4)
@@ -209,6 +249,48 @@ class TestDomainServicesAndUseCase(unittest.TestCase):
         self.assertEqual(fake_engine.calls, [(input_path, 4, -1, expected_output)])
         self.assertEqual(fake_storage.calls, [expected_output])
         self.assertEqual(result.scale_factor.value, 4)
+
+    def test_run_upscale_usecase_trims_gemini_prefix_when_suffix_is_disabled(self) -> None:
+        # Arrange
+        usecase, fake_engine, fake_storage = self._build_usecase()
+        input_path = Path("C:/images/Gemini_Generated_Image_re0bwkre0bwkre0b.png")
+
+        # Act
+        result = usecase.execute(
+            RunUpscaleCommand(
+                input_image_path=input_path,
+                scale_factor=4,
+                denoise_level=2,
+                append_output_suffix=False,
+            )
+        )
+
+        # Assert
+        expected_output = Path("C:/images/re0bwkre0bwkre0b.png")
+        self.assertEqual(fake_engine.calls, [(input_path, 4, 2, expected_output)])
+        self.assertEqual(fake_storage.calls, [expected_output])
+        self.assertEqual(result.output_image_path.value, expected_output)
+
+    def test_run_upscale_usecase_falls_back_to_suffix_when_suffix_disabled_would_overwrite_input(self) -> None:
+        # Arrange
+        usecase, fake_engine, fake_storage = self._build_usecase()
+        input_path = Path("C:/images/sample.png")
+
+        # Act
+        result = usecase.execute(
+            RunUpscaleCommand(
+                input_image_path=input_path,
+                scale_factor=2,
+                denoise_level=1,
+                append_output_suffix=False,
+            )
+        )
+
+        # Assert
+        expected_output = Path("C:/images/sample-denoise1x-up2x.png")
+        self.assertEqual(fake_engine.calls, [(input_path, 2, 1, expected_output)])
+        self.assertEqual(fake_storage.calls, [expected_output])
+        self.assertEqual(result.output_image_path.value, expected_output)
 
     def test_run_upscale_batch_usecase_continues_when_one_item_fails(self) -> None:
         # Arrange
@@ -354,6 +436,51 @@ class TestDomainServicesAndUseCase(unittest.TestCase):
         self.assertEqual(result.items[1].input_image_path, input_paths[1])
         self.assertIsNone(result.items[1].output_image_path)
         self.assertEqual(fake_engine.calls, [(input_paths[0], 2, 0, Path("C:/images/ok-denoise0x-up2x.png"))])
+
+    def test_run_upscale_batch_usecase_uses_same_resolved_name_for_failed_item_after_auto_sizing(self) -> None:
+        # Arrange
+        input_paths = [Path("C:/images/ok.png"), Path("C:/images/fail.png")]
+        fake_engine = FakeUpscaleEngine(fail_input_paths={input_paths[1]})
+        fake_storage = FakeImageStorage()
+        image_size_reader = FakeImageSizeReader(
+            size_by_path={
+                input_paths[0]: ImageSize(width=2752, height=1536),
+                input_paths[1]: ImageSize(width=1376, height=768),
+            }
+        )
+        usecase = RunUpscaleBatchUseCase(
+            upscale_engine=fake_engine,
+            image_storage=fake_storage,
+            image_size_reader=image_size_reader,
+        )
+
+        # Act
+        result = usecase.execute(
+            RunUpscaleBatchCommand(
+                input_image_paths=input_paths,
+                scale_factor=4,
+                denoise_level=0,
+                auto_sizing_enabled=True,
+                append_output_suffix=True,
+            )
+        )
+
+        # Assert
+        self.assertEqual(
+            [item.output_image_path for item in result.items],
+            [
+                Path("C:/images/ok-denoise0x-up2x.png"),
+                Path("C:/images/fail-denoise0x-up3x.png"),
+            ],
+        )
+        self.assertEqual(
+            fake_engine.calls,
+            [
+                (input_paths[0], 2, 0, Path("C:/images/ok-denoise0x-up2x.png")),
+                (input_paths[1], 3, 0, Path("C:/images/fail-denoise0x-up3x.png")),
+            ],
+        )
+        self.assertEqual([item.scale_factor.value for item in result.items], [2, 3])
 
     def test_run_upscale_batch_usecase_ignores_explicit_output_paths_and_uses_default_naming(self) -> None:
         # Arrange

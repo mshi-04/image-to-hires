@@ -14,6 +14,7 @@ class QtApplicationSettings(ApplicationSettingsPort):
     _ORGANIZATION = "image-to-hires"
     _APPLICATION = "image-to-hires"
     _AUTO_SIZING_KEY = "ui/auto_sizing_enabled"
+    _APPEND_OUTPUT_SUFFIX_KEY = "ui/append_output_suffix"
 
     def __init__(self, settings: QSettings | None = None) -> None:
         self._settings = settings or QSettings(self._ORGANIZATION, self._APPLICATION)
@@ -36,6 +37,28 @@ class QtApplicationSettings(ApplicationSettingsPort):
             _LOGGER.warning(
                 "Failed to save setting '%s'=%s: status=%s",
                 self._AUTO_SIZING_KEY,
+                bool(enabled),
+                self._settings.status().name,
+            )
+
+    def load_append_output_suffix(self) -> bool:
+        value = self._settings.value(self._APPEND_OUTPUT_SUFFIX_KEY, True, type=bool)
+        if self._settings.status() != QSettings.Status.NoError:
+            _LOGGER.warning(
+                "Failed to load setting '%s': status=%s",
+                self._APPEND_OUTPUT_SUFFIX_KEY,
+                self._settings.status().name,
+            )
+            return True
+        return bool(value)
+
+    def save_append_output_suffix(self, enabled: bool) -> None:
+        self._settings.setValue(self._APPEND_OUTPUT_SUFFIX_KEY, bool(enabled))
+        self._settings.sync()
+        if self._settings.status() != QSettings.Status.NoError:
+            _LOGGER.warning(
+                "Failed to save setting '%s'=%s: status=%s",
+                self._APPEND_OUTPUT_SUFFIX_KEY,
                 bool(enabled),
                 self._settings.status().name,
             )

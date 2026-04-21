@@ -18,6 +18,7 @@ class RunUpscaleBatchCommand:
     scale_factor: int
     denoise_level: int
     auto_sizing_enabled: bool = False
+    append_output_suffix: bool = True
     output_image_paths: Sequence[Path | str | None] | None = None
 
 
@@ -109,6 +110,7 @@ class RunUpscaleBatchUseCase:
                         scale_factor=scale_factor.value,
                         denoise_level=denoise_level.value,
                         auto_sizing_enabled=command.auto_sizing_enabled,
+                        append_output_suffix=command.append_output_suffix,
                     )
                 )
                 output_image_path = job.output_image.value

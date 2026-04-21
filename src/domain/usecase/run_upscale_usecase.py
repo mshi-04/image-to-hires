@@ -20,6 +20,7 @@ class RunUpscaleCommand:
     scale_factor: int
     denoise_level: int
     auto_sizing_enabled: bool = False
+    append_output_suffix: bool = True
     output_image_path: Path | str | None = None
 
 
@@ -62,6 +63,7 @@ class RunUpscaleUseCase:
             input_image=input_image,
             scale_factor=scale_factor,
             denoise_level=denoise_level,
+            append_output_suffix=command.append_output_suffix,
             output_image_path=command.output_image_path,
         )
 

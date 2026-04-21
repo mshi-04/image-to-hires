@@ -94,6 +94,7 @@ class MainWindow(QMainWindow):
         self.input_area.files_selected.connect(self._on_files_selected)
         self.start_button.clicked.connect(self._on_start_clicked)
         self.settings_widget.auto_sizing_checkbox.toggled.connect(self._on_auto_sizing_toggled)
+        self.settings_widget.append_output_suffix_checkbox.toggled.connect(self._on_append_output_suffix_toggled)
 
     @Slot(list)
     def _on_files_selected(self, files: list[Path]) -> None:
@@ -109,10 +110,17 @@ class MainWindow(QMainWindow):
         denoise_level = self.settings_widget.get_denoise_level()
         scale_factor = self.settings_widget.get_scale_factor()
         auto_sizing_enabled = self.settings_widget.is_auto_sizing_enabled()
+        append_output_suffix = self.settings_widget.should_append_output_suffix()
 
-        self._start_worker(denoise_level, scale_factor, auto_sizing_enabled)
+        self._start_worker(denoise_level, scale_factor, auto_sizing_enabled, append_output_suffix)
 
-    def _start_worker(self, denoise_level: int, scale_factor: int, auto_sizing_enabled: bool) -> None:
+    def _start_worker(
+        self,
+        denoise_level: int,
+        scale_factor: int,
+        auto_sizing_enabled: bool,
+        append_output_suffix: bool,
+    ) -> None:
         if self._worker_thread is not None:
             return
 
@@ -128,6 +136,7 @@ class MainWindow(QMainWindow):
             denoise_level=denoise_level,
             scale_factor=scale_factor,
             auto_sizing_enabled=auto_sizing_enabled,
+            append_output_suffix=append_output_suffix,
         )
         thread = QThread(self)
         worker.moveToThread(thread)
@@ -198,8 +207,13 @@ class MainWindow(QMainWindow):
     def _on_auto_sizing_toggled(self, enabled: bool) -> None:
         self._app_settings.save_auto_sizing_enabled(enabled)
 
+    @Slot(bool)
+    def _on_append_output_suffix_toggled(self, enabled: bool) -> None:
+        self._app_settings.save_append_output_suffix(enabled)
+
     def _load_persisted_settings(self) -> None:
         self.settings_widget.set_auto_sizing_enabled(self._app_settings.load_auto_sizing_enabled())
+        self.settings_widget.set_append_output_suffix(self._app_settings.load_append_output_suffix())
 
     def closeEvent(self, event: QCloseEvent) -> None:
         if self._worker_thread is not None and self._worker_thread.isRunning():
