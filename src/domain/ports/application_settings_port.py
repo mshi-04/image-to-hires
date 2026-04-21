@@ -15,3 +15,9 @@ class ApplicationSettingsPort(Protocol):
 
     def save_append_output_suffix(self, enabled: bool) -> None:
         """Persist the output suffix preference."""
+
+    def load_last_selected_directory(self) -> str | None:
+        """Return the previously selected input directory path."""
+
+    def save_last_selected_directory(self, directory: str) -> None:
+        """Persist the latest input directory path."""
