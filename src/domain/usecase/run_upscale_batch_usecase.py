@@ -2,12 +2,11 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
+from src.domain.ports.image_size_reader_port import ImageSizeReaderPort
 from src.domain.ports.image_storage_port import ImageStoragePort
 from src.domain.ports.upscale_engine_port import UpscaleEnginePort
-from src.domain.services.output_path_service import resolve_output_image_path
 from src.domain.usecase.run_upscale_usecase import RunUpscaleCommand, RunUpscaleUseCase
 from src.domain.value_objects.denoise_level import DenoiseLevel
-from src.domain.value_objects.image_path import InputImagePath
 from src.domain.value_objects.scale_factor import ScaleFactor
 
 
@@ -18,6 +17,8 @@ class RunUpscaleBatchCommand:
     input_image_paths: Sequence[Path | str]
     scale_factor: int
     denoise_level: int
+    auto_sizing_enabled: bool = False
+    append_output_suffix: bool = True
     output_image_paths: Sequence[Path | str | None] | None = None
 
 
@@ -50,9 +51,15 @@ class RunUpscaleBatchResult:
 class RunUpscaleBatchUseCase:
     """Execute sequential upscaling for multiple images."""
 
-    def __init__(self, upscale_engine: UpscaleEnginePort, image_storage: ImageStoragePort) -> None:
+    def __init__(
+        self,
+        upscale_engine: UpscaleEnginePort,
+        image_storage: ImageStoragePort,
+        image_size_reader: ImageSizeReaderPort | None = None,
+    ) -> None:
         self._upscale_engine = upscale_engine
         self._image_storage = image_storage
+        self._image_size_reader = image_size_reader
 
     def ensure_runtime_ready(self) -> None:
         self._upscale_engine.ensure_runtime_ready()
@@ -78,7 +85,11 @@ class RunUpscaleBatchUseCase:
 
         self.ensure_runtime_ready()
         output_image_paths = self._resolve_output_image_paths(command.output_image_paths, total_count)
-        single_usecase = RunUpscaleUseCase(self._upscale_engine, self._image_storage)
+        single_usecase = RunUpscaleUseCase(
+            self._upscale_engine,
+            self._image_storage,
+            image_size_reader=self._image_size_reader,
+        )
 
         item_results: list[UpscaleBatchItemResult] = []
         success_count = 0
@@ -88,40 +99,36 @@ class RunUpscaleBatchUseCase:
             current_input_path = Path(input_image_path)
             if item_started_callback is not None:
                 item_started_callback(current_input_path, index + 1, total_count)
+            job = None
             output_image_path: Path | None = None
             try:
-                input_image = InputImagePath(current_input_path)
                 output_candidate = output_image_paths[index] if output_image_paths is not None else None
-                output_image = resolve_output_image_path(
-                    input_image=input_image,
-                    scale_factor=scale_factor,
-                    denoise_level=denoise_level,
-                    output_image_path=output_candidate,
-                )
-
-                output_image_path = output_image.value
-                single_usecase.execute(
+                job = single_usecase.prepare_job(
                     RunUpscaleCommand(
-                        input_image_path=input_image.value,
-                        output_image_path=output_image.value,
+                        input_image_path=current_input_path,
+                        output_image_path=output_candidate,
                         scale_factor=scale_factor.value,
                         denoise_level=denoise_level.value,
+                        auto_sizing_enabled=command.auto_sizing_enabled,
+                        append_output_suffix=command.append_output_suffix,
                     )
                 )
+                output_image_path = job.output_image.value
+                result = single_usecase.execute_job(job)
                 item_result = UpscaleBatchItemResult(
-                    input_image_path=input_image.value,
-                    output_image_path=output_image.value,
-                    scale_factor=scale_factor,
-                    denoise_level=denoise_level,
+                    input_image_path=job.input_image.value,
+                    output_image_path=result.output_image_path.value,
+                    scale_factor=result.scale_factor,
+                    denoise_level=result.denoise_level,
                 )
                 success_count += 1
             # Intentionally catch per-item errors so batch processing can continue.
             except Exception as exc:  # noqa: BLE001
                 item_result = UpscaleBatchItemResult(
-                    input_image_path=current_input_path,
+                    input_image_path=job.input_image.value if job is not None else current_input_path,
                     output_image_path=output_image_path,
-                    scale_factor=scale_factor,
-                    denoise_level=denoise_level,
+                    scale_factor=job.scale_factor if job is not None else scale_factor,
+                    denoise_level=job.denoise_level if job is not None else denoise_level,
                     error=exc,
                 )
                 failure_count += 1

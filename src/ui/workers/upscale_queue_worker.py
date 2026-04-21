@@ -25,12 +25,16 @@ class UpscaleQueueWorker(QObject):
         input_files: list[Path],
         denoise_level: int,
         scale_factor: int,
+        auto_sizing_enabled: bool,
+        append_output_suffix: bool,
     ) -> None:
         super().__init__()
         self._batch_usecase = batch_usecase
         self._input_files = list(input_files)
         self._denoise_level = denoise_level
         self._scale_factor = scale_factor
+        self._auto_sizing_enabled = auto_sizing_enabled
+        self._append_output_suffix = append_output_suffix
 
     @Slot()
     def run(self) -> None:
@@ -41,6 +45,8 @@ class UpscaleQueueWorker(QObject):
                 input_image_paths=self._input_files,
                 denoise_level=self._denoise_level,
                 scale_factor=self._scale_factor,
+                auto_sizing_enabled=self._auto_sizing_enabled,
+                append_output_suffix=self._append_output_suffix,
             )
             result = self._batch_usecase.execute(
                 command=command,
