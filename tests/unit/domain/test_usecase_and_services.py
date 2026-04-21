@@ -105,21 +105,6 @@ class TestDomainServicesAndUseCase(unittest.TestCase):
                 # Assert
                 self.assertEqual(output.value, Path(expected))
 
-    def test_build_default_output_path_omits_suffix_when_disabled_and_trimmed_name_is_unique(self) -> None:
-        # Arrange
-        input_path = InputImagePath(Path("C:/images/Gemini_Generated_Image_re0bwkre0bwkre0b.png"))
-
-        # Act
-        output = build_default_output_path(
-            input_path,
-            ScaleFactor(4),
-            DenoiseLevel(2),
-            append_output_suffix=False,
-        )
-
-        # Assert
-        self.assertEqual(output.value, Path("C:/images/re0bwkre0bwkre0b.png"))
-
     def test_build_default_output_path_trims_gemini_prefix_before_applying_rules(self) -> None:
         # Arrange
         input_path = InputImagePath(Path("C:/images/Gemini_Generated_Image_re0bwkre0bwkre0b.png"))

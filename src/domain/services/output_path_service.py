@@ -34,15 +34,14 @@ def build_default_output_path(
     stem = _resolve_output_stem(input_image)
     parent = input_image.value.parent
     suffix = input_image.value.suffix.lower()
-    if append_output_suffix:
-        denoise_label = str(denoise_level.value)
-        output_path = parent / f"{stem}-denoise{denoise_label}x-up{scale_factor.value}x{suffix}"
-    else:
-        output_path = parent / f"{stem}{suffix}"
+    denoise_label = str(denoise_level.value)
+    suffix_path = parent / f"{stem}-denoise{denoise_label}x-up{scale_factor.value}x{suffix}"
 
-    if not append_output_suffix and _paths_conflict(input_image.value, output_path):
-        denoise_label = str(denoise_level.value)
-        output_path = parent / f"{stem}-denoise{denoise_label}x-up{scale_factor.value}x{suffix}"
+    if not append_output_suffix:
+        plain_path = parent / f"{stem}{suffix}"
+        output_path = plain_path if not _paths_conflict(input_image.value, plain_path) else suffix_path
+    else:
+        output_path = suffix_path
 
     return OutputImagePath(Path(output_path))
 
